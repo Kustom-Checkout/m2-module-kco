@@ -26,6 +26,7 @@ use Klarna\Kco\Model\PaymentStatus as KcoPaymentStatus;
 use Magento\Framework\Api\SearchCriteriaBuilder;
 use Klarna\Kco\Model\WorkflowProvider;
 use Klarna\Logger\Api\LoggerInterface;
+use Magento\Framework\DataObject;
 use Magento\Framework\Exception\AlreadyExistsException;
 use Magento\Framework\Exception\CouldNotSaveException;
 use Magento\Framework\Exception\LocalizedException;
@@ -111,6 +112,10 @@ class Order
      * @var SearchCriteriaBuilder
      */
     private SearchCriteriaBuilder $searchCriteriaBuilder;
+    /**
+     * @var DataObject[]
+     */
+    private array $klarnaOrderDetailsCache = [];
 
     /**
      * @param KcoSession               $kcoSession
@@ -325,9 +330,13 @@ class Order
             if (!$klarnaId) {
                 $klarnaId = $klarnaOrderId;
             }
-            if ($order->getStatus() !== 'CANCELED') {
+            if ($order->getStatus() !== 'CANCELLED') {
                 $orderManagement->cancel($klarnaId);
                 $this->logger->info('Canceled order with Klarna - ' . $cancelReason);
+            }
+
+            if ($magentoOrder !== null && !$magentoOrder->isCanceled()) {
+                $this->cancelMagentoOrder($magentoOrder, KcoApiInterface::ORDER_STATUS_CANCELLED);
             }
         } catch (\Exception $e) {
             $this->logger->log('error', $e);
@@ -355,6 +364,18 @@ class Order
             $this->mageOrder->getOrderCurrencyCode(),
             $this->mageOrder->getStore()
         );
+        $klarnaOrderDetails = $this->fetchKlarnaOrderDetails($omApi, $klarnaOrder->getKlarnaOrderId());
+        $klarnaStatus = $klarnaOrderDetails->getStatus();
+        // TODO: Consider saving cancel status in database klarna table
+        if ($klarnaStatus === KcoApiInterface::ORDER_STATUS_CANCELLED) {
+            $this->logger->info(
+                'Klarna order is ' . $klarnaStatus . '. Cancelling Magento order: '
+                . $this->mageOrder->getIncrementId()
+            );
+            $this->cancelMagentoOrder($this->mageOrder, $klarnaStatus);
+            return;
+        }
+
         $this->updateOrderWithKlarnaReference($klarnaOrder, $this->mageOrder, $omApi);
 
         $omApi->updateMerchantReferences($klarnaOrderId, $this->mageOrder->getIncrementId());
@@ -381,6 +402,46 @@ class Order
     }
 
     /**
+     * @param ApiInterface $omApi
+     * @param string $klarnaOrderId
+     * @return DataObject
+     */
+    private function fetchKlarnaOrderDetails(ApiInterface $omApi, string $klarnaOrderId): DataObject
+    {
+        if (!isset($this->klarnaOrderDetailsCache[$klarnaOrderId])) {
+            $this->klarnaOrderDetailsCache[$klarnaOrderId] = $omApi->getPlacedKlarnaOrder($klarnaOrderId);
+        }
+
+        return $this->klarnaOrderDetailsCache[$klarnaOrderId];
+    }
+
+    /**
+     * @param MagentoOrderInterface $order
+     * @param string $klarnaStatus
+     */
+    private function cancelMagentoOrder(MagentoOrderInterface $order, string $klarnaStatus): void
+    {
+        if (!$order->canCancel()) {
+            $this->logger->info(
+                'Magento order ' . $order->getIncrementId()
+                . ' cannot be cancelled (state: ' . $order->getState() . ')'
+            );
+            return;
+        }
+
+        $order->setState(SalesOrder::STATE_CANCELED);
+        $order->setStatus(SalesOrder::STATE_CANCELED);
+        $order->addStatusHistoryComment(
+            __('Order automatically cancelled because Klarna status is: %1', $klarnaStatus)
+        );
+        $this->mageOrderRepository->save($order);
+
+        $this->logger->info(
+            'Magento order ' . $order->getIncrementId() . ' cancelled due to Klarna status: ' . $klarnaStatus
+        );
+    }
+
+    /**
      * Updating the Magento order with the Klarna reference
      *
      * @param OrderInterface        $klarnaOrder
@@ -392,7 +453,7 @@ class Order
         MagentoOrderInterface $order,
         ApiInterface $omApi
     ): void {
-        $klarnaOrderDetails = $omApi->getPlacedKlarnaOrder($klarnaOrder->getKlarnaOrderId());
+        $klarnaOrderDetails = $this->fetchKlarnaOrderDetails($omApi, $klarnaOrder->getKlarnaOrderId());
 
         // Add invoice to order details
         $klarnaReference = $klarnaOrderDetails->getKlarnaReference();

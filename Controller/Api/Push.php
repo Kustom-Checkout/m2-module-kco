@@ -158,7 +158,7 @@ class Push extends CsrfAbstract implements HttpPostActionInterface
      */
     private function cancelKlarnaOrder(string $klarnaOrderId, LocalizedException $e): Json
     {
-        $this->logger->critical($e);
+        $this->logger->critical('Push: Cancelling order. Error occured: ' . $e->getMessage());
         $responseCodeObject = $this->getFailureResponseObject(500);
         $this->checkoutOrder->cancelKlarnaOrder($klarnaOrderId, $e->getMessage());
 
