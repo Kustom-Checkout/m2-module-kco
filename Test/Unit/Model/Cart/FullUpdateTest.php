@@ -6,7 +6,7 @@
  * and LICENSE files that were distributed with this source code.
  */
 
-namespace Klarna\Kco\Test\Unit\Model\Checkout;
+namespace Klarna\Kco\Test\Unit\Model\Cart;
 
 use Klarna\Kco\Model\Cart\FullUpdate;
 use Klarna\Base\Test\Unit\Mock\MockFactory;
@@ -112,7 +112,12 @@ class FullUpdateTest extends TestCase
         $this->quote->method('getShippingAddress')
             ->willReturn($quoteShippingAddress);
 
-        $extensionAttributes = $this->mockFactory->create(CartExtension::class, [], ['getShippingAssignments']);
+        if (method_exists(CartExtension::class, 'getShippingAssignments')) {
+            $extensionAttributes = $this->mockFactory->create(CartExtension::class, ['getShippingAssignments']);
+        } else {
+            $extensionAttributes = $this->mockFactory->create(CartExtension::class, [], ['getShippingAssignments']);
+        }
+
         $extensionAttributes->method('getShippingAssignments')
             ->willReturn([]);
 
