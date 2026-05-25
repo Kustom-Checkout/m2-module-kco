@@ -418,7 +418,7 @@ class PushTest extends AbstractController
      */
     public function testExecuteShouldNotCancelOrderDueToLocalizedException(): void
     {
-        $expectedResponse = '{"error":"Test error"}';
+        $expectedResponse = '{"error":"Failed to update order state"}';
         $klarnaOrderId = '123456-1234-1234-1234-1234567890';
 
         $this->assertOrderData(
@@ -480,7 +480,7 @@ class PushTest extends AbstractController
      */
     public function testExecuteShouldNotCancelOrderDueToLocalizedExceptionWhenCreatingOneWithCheckoutApiDetails(): void
     {
-        $expectedResponse = '{"error":"Test error"}';
+        $expectedResponse = '{"error":"Failed to create order"}';
         $klarnaOrderId = '123456-1234-1234-1234-1234567890';
 
         $this->assertOrderData(
