@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Klarna\Base\Test\Integration\Controller;
 
 use Klarna\Backend\Model\Api\Rest\Service\Ordermanagement;
+use Klarna\Base\Exception;
 use Klarna\Base\Model\OrderFactory as KlarnaOrderFactory;
 use Klarna\Kco\Model\Api\Rest\Service\Checkout;
 use Magento\Framework\App\Request\Http;
@@ -373,6 +374,131 @@ class PushTest extends AbstractController
             ->willReturn([]);
         $this->orderManagementMock->expects($this->any())->method('acknowledgeOrder')
             ->willReturn(['is_successful' => true]);
+
+        $this->getRequest()->setMethod(Http::METHOD_POST);
+        $this->dispatch('kco/api/push/id/' . $klarnaOrderId);
+        $this->assertEquals($expectedResponse, $this->getResponse()->getBody());
+
+        $this->assertOrderData(
+            $klarnaOrderId,
+            [],
+            [],
+            []
+        );
+    }
+
+    /**
+     * @magentoAppIsolation enabled
+     * @magentoDbIsolation enabled
+     */
+    public function testExecuteShouldThrowAnErrorWhenIdMatchesNothing(): void
+    {
+        $klarnaOrderId = '123456-1234-1234-1234-1234567890';
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage(
+            'No Klarna Kco quote could be found with the provided Klarna order id: ' . $klarnaOrderId
+        );
+
+        $this->assertOrderData(
+            $klarnaOrderId,
+            [],
+            [],
+            []
+        );
+
+        $this->getRequest()->setMethod(Http::METHOD_POST);
+        $this->dispatch('kco/api/push/id/' . $klarnaOrderId);
+    }
+
+    /**
+     * @magentoAppIsolation enabled
+     * @magentoDbIsolation enabled
+     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/klarna_order_setup1_single_simple_product.php
+     */
+    public function testExecuteShouldNotCancelOrderDueToLocalizedException(): void
+    {
+        $expectedResponse = '{"error":"Test error"}';
+        $klarnaOrderId = '123456-1234-1234-1234-1234567890';
+
+        $this->assertOrderData(
+            $klarnaOrderId,
+            [
+                'klarna_order_id' => $klarnaOrderId,
+                'is_acknowledged' => '0',
+            ],
+            [
+                'state' => 'new',
+                'status' => 'pending',
+                'increment_id' => '100000001',
+            ],
+            [
+                'additional_information' => [
+                    'method_title' => 'Check / Money order',
+                ],
+            ]
+        );
+
+        $this->orderManagementMock->expects($this->any())->method('getOrder')
+            ->willReturn([
+                'captured_amount' => 0,
+                'captures' => [],
+                'klarna_reference' => '12345',
+            ]);
+        $this->orderManagementMock->expects($this->any())->method('updateMerchantReferences')
+            ->willThrowException(new LocalizedException(__('Test error')));
+        $this->orderManagementMock->expects($this->never())->method('cancelOrder');
+
+        $this->getRequest()->setMethod(Http::METHOD_POST);
+        $this->dispatch('kco/api/push/id/' . $klarnaOrderId);
+        $this->assertEquals($expectedResponse, $this->getResponse()->getBody());
+
+        $this->assertOrderData(
+            $klarnaOrderId,
+            [
+                'klarna_order_id' => $klarnaOrderId,
+                'is_acknowledged' => '0',
+            ],
+            [
+                'state' => 'new',
+                'status' => 'pending',
+                'increment_id' => '100000001',
+            ],
+            [
+                'additional_information' => [
+                    'method_title' => 'Check / Money order',
+                ],
+            ]
+        );
+    }
+
+    /**
+     * @magentoAppIsolation enabled
+     * @magentoDbIsolation enabled
+     * @magentoConfigFixture current_store payment/klarna_kco/active 1
+     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/quote_setup1_single_simple_product.php
+     */
+    public function testExecuteShouldNotCancelOrderDueToLocalizedExceptionWhenCreatingOneWithCheckoutApiDetails(): void
+    {
+        $expectedResponse = '{"error":"Test error"}';
+        $klarnaOrderId = '123456-1234-1234-1234-1234567890';
+
+        $this->assertOrderData(
+            $klarnaOrderId,
+            [],
+            [],
+            []
+        );
+
+        $this->checkoutMock->expects($this->any())->method('getOrder')
+            ->willThrowException(new LocalizedException(__('Test error')));
+        $this->orderManagementMock->expects($this->any())->method('getOrder')
+            ->willReturn([
+                'captured_amount' => 0,
+                'captures' => [],
+                'klarna_reference' => '12345',
+            ]);
+        $this->orderManagementMock->expects($this->never())->method('cancelOrder');
 
         $this->getRequest()->setMethod(Http::METHOD_POST);
         $this->dispatch('kco/api/push/id/' . $klarnaOrderId);
