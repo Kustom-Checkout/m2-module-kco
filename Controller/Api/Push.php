@@ -48,12 +48,6 @@ class Push extends CsrfAbstract implements HttpPostActionInterface
     private $checkoutOrder;
 
     /**
-     * @var DataObjectFactory
-     * @deprecated To be removed as unused in next major release, alongside the constructor argument
-     */
-    private $dataObjectFactory;
-
-    /**
      * @var Result
      */
     private $result;
@@ -91,7 +85,7 @@ class Push extends CsrfAbstract implements HttpPostActionInterface
     public function __construct(
         LoggerInterface $logger,
         CheckoutOrder $checkoutOrder,
-        DataObjectFactory $dataObjectFactory,
+        DataObjectFactory $dataObjectFactory, // To be removed as unused in next major release!
         Result $result,
         Logger $apiLogger,
         Container $container,
@@ -100,7 +94,6 @@ class Push extends CsrfAbstract implements HttpPostActionInterface
     ) {
         $this->logger = $logger;
         $this->checkoutOrder = $checkoutOrder;
-        $this->dataObjectFactory = $dataObjectFactory;
         $this->result = $result;
         $this->apiLogger = $apiLogger;
         $this->container = $container;
@@ -119,17 +112,18 @@ class Push extends CsrfAbstract implements HttpPostActionInterface
         $this->workflowProvider->setKlarnaOrderId($klarnaOrderId);
         $this->logger->debug('Push: klarna order id: ' . $klarnaOrderId);
 
-        if ($this->canUpdateOrderState()) {
-            return $this->updateOrderState($klarnaOrderId);
+        $createOrderStatus = $this->canCreateOrder() ? $this->createOrder($klarnaOrderId) : true;
+        if ($createOrderStatus instanceof Json) {
+            return $createOrderStatus;
         }
 
-        return $this->createOrder($klarnaOrderId);
+        return $this->updateOrderState($klarnaOrderId);
     }
 
     /**
      * @return bool
      */
-    private function canUpdateOrderState(): bool
+    private function canCreateOrder(): bool
     {
         // TODO: We shouldn't need to rely on exception + it can result in false positives, let's eventually add
         // possibility to figure out existence of these instances by something more simplified
@@ -138,10 +132,59 @@ class Push extends CsrfAbstract implements HttpPostActionInterface
             $this->workflowProvider->getMagentoOrder();
             $this->workflowProvider->getKlarnaOrder();
 
-            return true;
-        } catch (KlarnaException $exception) {
             return false;
+        } catch (KlarnaException $exception) {
+            return true;
         }
+    }
+
+    /**
+     * @param string $klarnaOrderId
+     *
+     * @return Json|true
+     */
+    private function createOrder(string $klarnaOrderId)
+    {
+        $this->logger->debug('Push: Attempting to create order by id ' . $klarnaOrderId);
+
+        try {
+            $this->checkoutOrder->createMagentoOrder($klarnaOrderId);
+            $this->checkoutOrder->sendCustomerMail();
+        } catch (AlreadyExistsException $exception) {
+            $this->logger->debug('Push: Order already exists for this Klarna order id: ' . $klarnaOrderId);
+        } catch (CartLockedException $exception) {
+            $this->logger->debug('Push: Retry order ' . $klarnaOrderId . ' - Exception: ' . $exception->getMessage());
+
+            return $this->result->getJsonResult(
+                503,
+                ['error' => $exception->getMessage()]
+            );
+        } catch (LocalizedException $e) {
+            // Before cancelling, check if a concurrent push already created the order successfully.
+            // If the Magento order exists, return success to avoid voiding a valid Klarna authorization.
+            $magentoOrder = $this->checkoutOrder->getMagentoOrder();
+            if ($magentoOrder !== null && $magentoOrder->getId()) {
+                $this->logger->debug('Push: Order already created by concurrent request: ' . $klarnaOrderId);
+
+                return true;
+            }
+
+            $this->apiLogger->logCallbackException(
+                $this->container,
+                ApiInterface::ACTIONS['push'],
+                $this->request,
+                $e
+            );
+
+            return $this->result->getJsonResult(
+                500,
+                ['error' => 'Failed to create order']
+            );
+        }
+
+        $this->logger->debug('Push: Order created successfully by id ' . $klarnaOrderId);
+
+        return true;
     }
 
     /**
@@ -172,81 +215,8 @@ class Push extends CsrfAbstract implements HttpPostActionInterface
         $this->container->setService(ServiceInterface::SERVICE_KCO);
         $this->apiLogger->logCallback($this->container, ApiInterface::ACTIONS['push'], $this->request, []);
 
-        return $this->getSuccessResponse();
-    }
-
-    /**
-     * Create order in Magento if it doesn't currently exist.
-     *
-     * This is the case when the customer selected a payment gateway method (for example "iDeal").
-     *
-     * @param string $klarnaOrderId
-     * @return Json
-     * @throws KlarnaException
-     */
-    private function createOrder(string $klarnaOrderId): Json
-    {
-        try {
-            $this->checkoutOrder->createMagentoOrder($klarnaOrderId);
-            $this->checkoutOrder->sendCustomerMail();
-            $this->checkoutOrder->updateOrderState($klarnaOrderId);
-        } catch (AlreadyExistsException $e) {
-            $this->logger->debug('Push: Order already exists for this Klarna order id: ' . $klarnaOrderId);
-        } catch (CartLockedException $e) {
-            return $this->getCartLockedResponse($klarnaOrderId, $e);
-        } catch (LocalizedException $e) {
-            // Before cancelling, check if a concurrent push already created the order successfully.
-            // If the Magento order exists, return success to avoid voiding a valid Klarna authorization.
-            $magentoOrder = $this->checkoutOrder->getMagentoOrder();
-            if ($magentoOrder !== null && $magentoOrder->getId()) {
-                $this->logger->debug('Push: Order already created by concurrent request: ' . $klarnaOrderId);
-
-                return $this->getSuccessResponse();
-            }
-
-            $this->apiLogger->logCallbackException(
-                $this->container,
-                ApiInterface::ACTIONS['push'],
-                $this->request,
-                $e
-            );
-
-            return $this->result->getJsonResult(
-                500,
-                ['error' => 'Failed to create order']
-            );
-        }
-
-        return $this->getSuccessResponse();
-    }
-
-    /**
-     * Getting back the success response
-     *
-     * @return Json
-     */
-    private function getSuccessResponse(): Json
-    {
         $this->logger->debug('Push: success');
 
         return $this->result->getJsonResult(200);
-    }
-
-    /**
-     * @param string $klarnaOrderId
-     * @param CartLockedException $e
-     *
-     * @return Json
-     */
-    private function getCartLockedResponse(string $klarnaOrderId, CartLockedException $e): Json
-    {
-        $this->logger->debug(
-            'Push: Retry order ' . $klarnaOrderId . ' - Exception: ' . $e->getMessage()
-        );
-
-        return $this->result->getJsonResult(
-            503,
-            ['error' => $e->getMessage()]
-        );
     }
 }
