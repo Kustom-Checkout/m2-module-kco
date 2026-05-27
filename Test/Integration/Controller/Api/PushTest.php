@@ -190,6 +190,7 @@ class PushTest extends AbstractController
      * @magentoAppIsolation enabled
      * @magentoDbIsolation enabled
      * @magentoConfigFixture current_store payment/klarna_kco/active 1
+     * @magentoConfigFixture current_store klarna/api/debug 1
      * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/quote_setup1_single_simple_product.php
      */
     public function testExecuteShouldSuccessfullyCreateOrderByCheckoutApiResponse(): void
