@@ -9,7 +9,7 @@
 
 declare(strict_types=1);
 
-namespace Klarna\Base\Test\Integration\Controller;
+namespace Klarna\Kco\Test\Integration\Controller;
 
 use Klarna\Backend\Model\Api\Rest\Service\Ordermanagement;
 use Klarna\Base\Model\OrderFactory as KlarnaOrderFactory;
