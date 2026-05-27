@@ -169,6 +169,8 @@ class Push extends CsrfAbstract implements HttpPostActionInterface
                 return true;
             }
 
+            $this->logger->debug('Push: Order creation failed: ' . $e->getMessage());
+
             $this->apiLogger->logCallbackException(
                 $this->container,
                 ApiInterface::ACTIONS['push'],
