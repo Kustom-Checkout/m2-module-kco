@@ -216,6 +216,7 @@ class PushTest extends AbstractController
                     'phone' => '040123456',
                     'postal_code' => '12345',
                     'street_address' => 'Street',
+                    'region' => 'California',
                 ],
                 'shipping_address' => [
                     'city' => 'City',
@@ -226,6 +227,7 @@ class PushTest extends AbstractController
                     'phone' => '040123456',
                     'postal_code' => '12345',
                     'street_address' => 'Street',
+                    'region' => 'California',
                 ],
                 'order_id' => $klarnaOrderId,
                 'is_successful' => true,
@@ -327,6 +329,7 @@ class PushTest extends AbstractController
                     'phone' => '040123456',
                     'postal_code' => '12345',
                     'street_address' => 'Street',
+                    'region' => 'California',
                 ],
                 'shipping_address' => [
                     'city' => 'City',
@@ -337,6 +340,7 @@ class PushTest extends AbstractController
                     'phone' => '040123456',
                     'postal_code' => '12345',
                     'street_address' => 'Street',
+                    'region' => 'California',
                 ],
                 'order_id' => $klarnaOrderId,
                 'is_successful' => true,
