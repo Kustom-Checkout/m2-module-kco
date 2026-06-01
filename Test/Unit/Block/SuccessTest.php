@@ -108,7 +108,7 @@ class SuccessTest extends TestCase
     protected function setUp(): void
     {
         $mockFactory           = new MockFactory($this);
-        $objectFactory         = new TestObjectFactory($mockFactory);
+        $objectFactory         = new TestObjectFactory('');
         $this->success         = $objectFactory->create(Success::class);
         $this->dependencyMocks = $objectFactory->getDependencyMocks();
         $this->order           = $mockFactory->create(Order::class);

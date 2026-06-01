@@ -104,7 +104,7 @@ class ShippingMethodTest extends TestCase
     protected function setUp(): void
     {
         $mockFactory   = new MockFactory($this);
-        $objectFactory = new TestObjectFactory($mockFactory);
+        $objectFactory = new TestObjectFactory('');
         $this->model   = $objectFactory->create(ShippingMethod::class);
         $this->request = $mockFactory->create(DataObject::class, [], [
             'getOrderId',

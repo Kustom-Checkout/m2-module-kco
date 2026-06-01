@@ -99,7 +99,7 @@ class AddPaymentStatusButtonTest extends TestCase
     protected function setUp(): void
     {
         $mockFactory = new MockFactory($this);
-        $objectFactory = new TestObjectFactory($mockFactory);
+        $objectFactory = new TestObjectFactory('');
 
         $this->model = $objectFactory->create(AddPaymentStatusButton::class);
         $this->dependencyMocks = $objectFactory->getDependencyMocks();
