@@ -98,7 +98,7 @@ class UpdateKssStatus implements HttpPostActionInterface
 
         $data = [];
         if ($isKssEnabled || $this->session->hasActiveKlarnaShippingGatewayInformation()) {
-            $this->logger->info('UpdateKssStatus: Updating the values in the Klarna table and quote');
+            $this->logger->info('UpdateKssStatus: Updating the values in the Kustom table and quote');
 
             $oldGrandTotal = $this->session->getQuote()->getGrandTotal();
 

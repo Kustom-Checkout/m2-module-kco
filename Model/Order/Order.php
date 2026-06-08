@@ -253,7 +253,7 @@ class Order
         $this->klarnaOrder = $this->workflowProvider->getKlarnaOrder();
         $this->klarnaOrder->setReservationId($reservationId);
         $this->orderRepository->save($this->klarnaOrder);
-        $this->logger->debug('Saved the klarna order');
+        $this->logger->debug('Saved the Kustom order');
 
         return $this->mageOrder;
     }
@@ -295,7 +295,7 @@ class Order
         }
 
         if (SalesOrder::STATE_PROCESSING === $order->getState()) {
-            $order->addStatusHistoryComment(__('Order processed by Klarna.'), $status);
+            $order->addStatusHistoryComment(__('Order processed by Kustom.'), $status);
         }
     }
 
@@ -332,7 +332,7 @@ class Order
             }
             if ($order->getStatus() !== 'CANCELLED') {
                 $orderManagement->cancel($klarnaId);
-                $this->logger->info('Canceled order with Klarna - ' . $cancelReason);
+                $this->logger->info('Canceled order with Kustom - ' . $cancelReason);
             }
 
             if ($magentoOrder !== null && !$magentoOrder->isCanceled()) {
@@ -369,7 +369,7 @@ class Order
         // TODO: Consider saving cancel status in database klarna table
         if ($klarnaStatus === KcoApiInterface::ORDER_STATUS_CANCELLED) {
             $this->logger->info(
-                'Klarna order is ' . $klarnaStatus . '. Cancelling Magento order: '
+                'Kustom order is ' . $klarnaStatus . '. Cancelling Magento order: '
                 . $this->mageOrder->getIncrementId()
             );
             $this->cancelMagentoOrder($this->mageOrder, $klarnaStatus);
@@ -396,7 +396,7 @@ class Order
     private function cancelOrder(MagentoOrderInterface $order, string $klarnaOrderId): void
     {
         if ($order->isCanceled()) {
-            $this->logger->debug('Cancel the order on the klarna side because it is canceled in the shop');
+            $this->logger->debug('Cancel the order on the Kustom side because it is canceled in the shop');
             $this->cancelKlarnaOrder($klarnaOrderId, 'Order Canceled in Magento');
         }
     }
@@ -432,12 +432,12 @@ class Order
         $order->setState(SalesOrder::STATE_CANCELED);
         $order->setStatus(SalesOrder::STATE_CANCELED);
         $order->addStatusHistoryComment(
-            __('Order automatically cancelled because Klarna status is: %1', $klarnaStatus)
+            __('Order automatically cancelled because Kustom status is: %1', $klarnaStatus)
         );
         $this->mageOrderRepository->save($order);
 
         $this->logger->info(
-            'Magento order ' . $order->getIncrementId() . ' cancelled due to Klarna status: ' . $klarnaStatus
+            'Magento order ' . $order->getIncrementId() . ' cancelled due to Kustom status: ' . $klarnaStatus
         );
     }
 
@@ -469,7 +469,7 @@ class Order
             }
         }
 
-        $this->logger->debug('Updated the order with the klarna reference');
+        $this->logger->debug('Updated the order with the Kustom reference');
     }
 
     /**
@@ -503,7 +503,7 @@ class Order
                 // TODO: Consider: Should we cancel order in Magento here?
                 throw new KlarnaException(__('Acknowledge call failed. Check log for details.'));
             }
-            $order->addStatusHistoryComment('Acknowledged request sent to Klarna');
+            $order->addStatusHistoryComment('Acknowledged request sent to Kustom');
             $klarnaOrder->setIsAcknowledged(1);
             $this->orderRepository->save($klarnaOrder);
         }
@@ -544,7 +544,7 @@ class Order
 
         $orderDetails = $this->paymentStatus->getStatusUpdate($klarnaOrder);
         if (!$orderDetails->getIsSuccessful()) {
-            throw new LocalizedException(__('An error happened when retrieving the status of the order from Klarna'));
+            throw new LocalizedException(__('An error happened when retrieving the status of the order from Kustom'));
         }
 
         $this->checkOrderState($mageOrder, $orderDetails->getStatus());
@@ -552,7 +552,7 @@ class Order
             return;
         }
 
-        throw new LocalizedException(__('Order is still PENDING with Klarna'));
+        throw new LocalizedException(__('Order is still PENDING with Kustom'));
     }
 
     /**
@@ -570,7 +570,7 @@ class Order
             $this->denyPayment(
                 $mageOrder,
                 __(
-                    'Canceled the order since no Klarna information could ' .
+                    'Canceled the order since no Kustom information could ' .
                     'be found in the Magento database for the order.'
                 )
             );
@@ -614,7 +614,7 @@ class Order
         if (in_array($status, $stopStatuses)) {
             $this->denyPayment(
                 $mageOrder,
-                __('Canceled the order as Klarna shows it as %1', $status)
+                __('Canceled the order as Kustom shows it as %1', $status)
             );
         }
     }

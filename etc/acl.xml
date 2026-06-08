@@ -14,8 +14,8 @@
             <resource id="Magento_Backend::admin">
                 <resource id="Magento_Backend::system">
                     <resource id="Klarna_Base::resource" sortOrder="10">
-                        <resource id="Klarna_Kco::payment_status" title="Klarna Get Payment Status" sortOrder="40"/>
-                        <resource id="Klarna_Kco::config" title="Klarna Checkout" sortOrder="50"/>
+                        <resource id="Klarna_Kco::payment_status" title="Kustom Get Payment Status" sortOrder="40"/>
+                        <resource id="Klarna_Kco::config" title="Kustom Checkout" sortOrder="50"/>
                     </resource>
                 </resource>
             </resource>

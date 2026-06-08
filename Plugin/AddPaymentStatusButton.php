@@ -67,7 +67,7 @@ class AddPaymentStatusButton
         }
 
         $message = __(
-            'This will make an API call to Klarna to attempt to update the order state. ' .
+            'This will make an API call to Kustom to attempt to update the order state. ' .
             'Are you sure you want to do this?'
         );
 

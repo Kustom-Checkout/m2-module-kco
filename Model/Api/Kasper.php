@@ -107,7 +107,7 @@ class Kasper extends DataObject implements ApiInterface
     public function retrieveOrder(string $currency, $checkoutId = null)
     {
         if (!$checkoutId) {
-            $message = __('Unable to initialize Klarna checkout order');
+            $message = __('Unable to initialize Kustom checkout order');
             throw new KlarnaException($message);
         }
         $api         = $this->getCheckoutApi();
@@ -174,7 +174,7 @@ class Kasper extends DataObject implements ApiInterface
                 )
             );
         }
-        $message = __('Unable to initialize Klarna checkout order');
+        $message = __('Unable to initialize Kustom checkout order');
 
         $klarnaErrorMessages = $klarnaOrder->getErrorMessages();
         if ($klarnaErrorMessages === null) {
@@ -183,7 +183,7 @@ class Kasper extends DataObject implements ApiInterface
 
         $apiMessages = implode('<br/>', $klarnaErrorMessages);
         if (!empty($apiMessages)) {
-            $message = __('Unable to initialize Klarna checkout order. Klarna api error: %1', $apiMessages);
+            $message = __('Unable to initialize Kustom checkout order. Kustom api error: %1', $apiMessages);
         }
 
         throw new KlarnaException($message);

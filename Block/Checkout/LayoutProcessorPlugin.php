@@ -138,14 +138,14 @@ class LayoutProcessorPlugin
         } catch (\Throwable $e) {
             if ($e->getCode() === Service::HTTP_UNAUTHORIZED) {
                 return __(
-                    'Invalid Klarna API Credentials. Please check your Merchant ID, ' .
+                    'Invalid Kustom API Credentials. Please check your Merchant ID, ' .
                     'Shared Secret, and selected API Version.'
                 );
             }
             $errorMessage = $e->getMessage();
             $this->manager->addErrorMessage($errorMessage);
             return __(
-                'Klarna Checkout has failed to load. Please ' .
+                'Kustom Checkout has failed to load. Please ' .
                 '<a href="javascript:;" onclick="location.reload(true)">reload checkout.</a>'
             );
         }

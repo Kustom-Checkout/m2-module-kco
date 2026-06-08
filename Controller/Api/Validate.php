@@ -126,7 +126,7 @@ class Validate extends CsrfAbstract implements HttpPostActionInterface
         $this->logger->info('Validate: start');
 
         $checkoutId = $this->request->getParam('id');
-        $this->logger->info('Validate: Klarna checkout id: ' . $checkoutId);
+        $this->logger->info('Validate: Kustom checkout id: ' . $checkoutId);
 
         try {
             $this->workflowProvider->setKlarnaOrderId($checkoutId);
@@ -166,7 +166,7 @@ class Validate extends CsrfAbstract implements HttpPostActionInterface
     private function setValidateFailedResponse($checkoutId, KlarnaException $e): Redirect
     {
         $message = $e->getMessage();
-        $this->logger->warning('Validate: Magento quote does not match Klarna order: ' . $message);
+        $this->logger->warning('Validate: Magento quote does not match Kustom order: ' . $message);
         $this->messageManager->addErrorMessage($message);
 
         return $this->redirectFactory->create()

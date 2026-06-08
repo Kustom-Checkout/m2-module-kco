@@ -93,7 +93,7 @@ class WorkflowProvider
     public function setKlarnaOrderId(string $klarnaOrderId): void
     {
         if (empty($klarnaOrderId)) {
-            throw new KlarnaException(__('The provided Klarna order id is empty'));
+            throw new KlarnaException(__('The provided Kustom order id is empty'));
         }
 
         $this->klarnaOrderId = $klarnaOrderId;
@@ -112,7 +112,7 @@ class WorkflowProvider
                 $this->kcoQuote = $this->kcoQuoteRepository->getByCheckoutId($this->klarnaOrderId);
             } catch (NoSuchEntityException $e) {
                 throw new KlarnaException(__(
-                    'No Klarna Kco quote could be found with the provided Klarna order id: %1',
+                    'No Kustom Kco quote could be found with the provided Kustom order id: %1',
                     $this->klarnaOrderId
                 ));
             }
@@ -156,7 +156,7 @@ class WorkflowProvider
                 $this->klarnaOrder = $this->klarnaOrderRepository->getByKlarnaOrderId($this->klarnaOrderId);
             } catch (NoSuchEntityException $e) {
                 throw new KlarnaException(__(
-                    'No Klarna order entry could be found with the provided Klarna order id: %1',
+                    'No Kustom order entry could be found with the provided Kustom order id: %1',
                     $this->klarnaOrderId
                 ));
             }
@@ -178,7 +178,7 @@ class WorkflowProvider
                 $this->magentoOrder = $this->magentoOrderRepository->get($this->getKlarnaOrder()->getOrderId());
             } catch (NoSuchEntityException|InputException $e) {
                 throw new KlarnaException(__(
-                    'No Magento order could be found with the provided Klarna order id: %1',
+                    'No Magento order could be found with the provided Kustom order id: %1',
                     $this->klarnaOrderId
                 ));
             }

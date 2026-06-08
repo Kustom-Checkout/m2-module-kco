@@ -54,7 +54,7 @@ class ShippingMethod implements CheckoutValidationInterface
         $klarnaShippingMethod = $this->getSelectedKlarnaShippingMethod($request);
         if ($quoteShippingMethod !== $klarnaShippingMethod) {
             $exceptionMessage = __(
-                'Shipping method does not match for order #%1. Klarna method is %2 vs Magento method is %3',
+                'Shipping method does not match for order #%1. Kustom method is %2 vs Magento method is %3',
                 $quote->getReservedOrderId(),
                 $klarnaShippingMethod,
                 $quoteShippingMethod

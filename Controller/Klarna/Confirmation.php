@@ -91,7 +91,7 @@ class Confirmation implements HttpGetActionInterface
     public function execute()
     {
         $klarnaOrderId = $this->request->getParam('id');
-        $this->logger->debug('Klarna order id: ' . $klarnaOrderId);
+        $this->logger->debug('Kustom order id: ' . $klarnaOrderId);
 
         if (!$klarnaOrderId) {
             return $this->getInvalidOrderIdResponse();

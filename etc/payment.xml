@@ -11,7 +11,7 @@
          xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Payment:etc/payment.xsd">
     <groups>
         <group id="klarna">
-            <label>Klarna</label>
+            <label>Kustom</label>
         </group>
     </groups>
     <methods>

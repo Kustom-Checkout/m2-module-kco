@@ -163,7 +163,7 @@ class AddressUpdate extends CsrfAbstract implements HttpPostActionInterface
     private function getKlarnaOrderId(): string
     {
         $klarnaOrderId = $this->request->getParam('id', '');
-        $this->logger->info('AddressUpdate: Klarna checkout id: ' . $klarnaOrderId);
+        $this->logger->info('AddressUpdate: Kustom checkout id: ' . $klarnaOrderId);
 
         return $klarnaOrderId;
     }
