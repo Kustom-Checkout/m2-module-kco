@@ -63,7 +63,7 @@ class KasperTest extends TestCase
     public function testRetrieveOrderWithInvalidCheckoutId(): void
     {
         $this->expectException(\Klarna\Base\Exception::class);
-        $this->expectExceptionMessage("Unable to initialize Klarna checkout order");
+        $this->expectExceptionMessage("Unable to initialize Kustom checkout order");
         $this->modelPartialMock->retrieveOrder('EUR', null);
     }
 

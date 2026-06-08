@@ -95,7 +95,7 @@ class ShippingAmountTest extends TestCase
     {
         $this->expectException(\Klarna\Base\Exception::class);
         $this->expectExceptionMessage(
-            "Shipping amount does not match for order AN-ORDER-ID. Klarna amount is 124 vs Magento amount is 123"
+            "Shipping amount does not match for order AN-ORDER-ID. Kustom amount is 124 vs Magento amount is 123"
         );
         $this->quote->expects(static::once())
             ->method('isVirtual')
@@ -131,7 +131,7 @@ class ShippingAmountTest extends TestCase
     {
         $this->expectException(\Klarna\Base\Exception::class);
         $this->expectExceptionMessage(
-            "Shipping amount does not match for order AN-ORDER-ID. Klarna amount is 124 vs Magento amount is 123"
+            "Shipping amount does not match for order AN-ORDER-ID. Kustom amount is 124 vs Magento amount is 123"
         );
         $this->performBasePriceMocking();
 

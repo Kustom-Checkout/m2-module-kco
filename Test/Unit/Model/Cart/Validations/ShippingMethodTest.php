@@ -81,7 +81,7 @@ class ShippingMethodTest extends TestCase
         $this->expectException(\Klarna\Base\Exception::class);
         $this->expectExceptionMessage(
             "Shipping method does not match for order #AN-ORDER-ID. " .
-            "Klarna method is some-other-method vs Magento method is some-method"
+            "Kustom method is some-other-method vs Magento method is some-method"
         );
         $this->quote->expects(static::once())
             ->method('isVirtual')
