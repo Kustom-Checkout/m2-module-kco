@@ -284,7 +284,7 @@ class PushTest extends AbstractController
             ],
             [
                 'additional_information' => [
-                    'method_title' => 'Klarna Checkout',
+                    'method_title' => 'Kustom Checkout',
                     'klarna_reference' => '12345',
                 ],
             ]
