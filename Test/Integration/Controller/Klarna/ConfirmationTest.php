@@ -9,9 +9,10 @@
 
 declare(strict_types=1);
 
-namespace Klarna\Kco\Test\Integration\Controller\Api;
+namespace Klarna\Kco\Test\Integration\Controller\Klarna;
 
 use Klarna\Backend\Model\Api\Rest\Service\Ordermanagement;
+use Klarna\Base\Exception;
 use Klarna\Base\Model\OrderFactory as KlarnaOrderFactory;
 use Klarna\Kco\Model\Api\Rest\Service\Checkout;
 use Magento\Framework\App\Request\Http;
@@ -23,7 +24,7 @@ use Magento\Sales\Model\OrderFactory as MagentoOrderFactory;
 use Magento\TestFramework\TestCase\AbstractController;
 use PHPUnit\Framework\MockObject\MockObject;
 
-class PushTest extends AbstractController
+class ConfirmationTest extends AbstractController
 {
     /**
      * @var KlarnaOrderFactory
@@ -61,132 +62,7 @@ class PushTest extends AbstractController
     }
 
     /**
-     * @magentoAppIsolation enabled
-     * @magentoDbIsolation enabled
-     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/klarna_order_setup1_single_simple_product.php
-     */
-    public function testExecuteShouldSuccessfullyAcknowledgeUnacknowledgedOrder(): void
-    {
-        $expectedResponse = '[]';
-        $klarnaOrderId = '123456-1234-1234-1234-1234567890';
-
-        $this->assertOrderData(
-            $klarnaOrderId,
-            [
-                'klarna_order_id' => $klarnaOrderId,
-                'is_acknowledged' => '0',
-            ],
-            [
-                'state' => 'new',
-                'status' => 'pending',
-                'increment_id' => '100000001',
-            ],
-            [
-                'additional_information' => [
-                    'method_title' => 'Check / Money order',
-                ],
-            ]
-        );
-
-        $this->orderManagementMock->expects($this->any())->method('getOrder')
-            ->willReturn([
-                'captured_amount' => 0,
-                'captures' => [],
-                'klarna_reference' => '12345',
-            ]);
-        $this->orderManagementMock->expects($this->any())->method('updateMerchantReferences')
-            ->willReturn([]);
-        $this->orderManagementMock->expects($this->any())->method('acknowledgeOrder')
-            ->willReturn(['is_successful' => true]);
-
-        $this->getRequest()->setMethod(Http::METHOD_POST);
-        $this->dispatch('kco/api/push/id/' . $klarnaOrderId);
-        $this->assertEquals($expectedResponse, $this->getResponse()->getBody());
-
-        $this->assertOrderData(
-            $klarnaOrderId,
-            [
-                'klarna_order_id' => $klarnaOrderId,
-                'is_acknowledged' => '1',
-            ],
-            [
-                'state' => 'new',
-                'status' => 'pending',
-                'increment_id' => '100000001',
-            ],
-            [
-                'additional_information' => [
-                    'method_title' => 'Check / Money order',
-                    'klarna_reference' => '12345',
-                ],
-            ]
-        );
-    }
-
-    /**
-     * @magentoAppIsolation enabled
-     * @magentoDbIsolation enabled
-     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/klarna_order_setup1_single_simple_product.php
-     */
-    public function testExecuteShouldSuccessfullyCancelOrderByCancelStatusInOrderData(): void
-    {
-        $expectedResponse = '[]';
-        $klarnaOrderId = '123456-1234-1234-1234-1234567890';
-
-        $this->assertOrderData(
-            $klarnaOrderId,
-            [
-                'klarna_order_id' => $klarnaOrderId,
-                'is_acknowledged' => '0',
-            ],
-            [
-                'state' => 'new',
-                'status' => 'pending',
-                'increment_id' => '100000001',
-            ],
-            [
-                'additional_information' => [
-                    'method_title' => 'Check / Money order',
-                ],
-            ]
-        );
-
-        $this->orderManagementMock->expects($this->any())->method('getOrder')
-            ->willReturn([
-                'captured_amount' => 0,
-                'captures' => [],
-                'klarna_reference' => '12345',
-                'status' => 'CANCELLED',
-            ]);
-        $this->orderManagementMock->expects($this->any())->method('updateMerchantReferences')
-            ->willReturn([]);
-        $this->orderManagementMock->expects($this->any())->method('acknowledgeOrder')
-            ->willReturn(['is_successful' => true]);
-
-        $this->getRequest()->setMethod(Http::METHOD_POST);
-        $this->dispatch('kco/api/push/id/' . $klarnaOrderId);
-        $this->assertEquals($expectedResponse, $this->getResponse()->getBody());
-
-        $this->assertOrderData(
-            $klarnaOrderId,
-            [
-                'klarna_order_id' => $klarnaOrderId,
-                'is_acknowledged' => '0',
-            ],
-            [
-                'state' => 'canceled',
-                'status' => 'canceled',
-                'increment_id' => '100000001',
-            ],
-            [
-                'additional_information' => [
-                    'method_title' => 'Check / Money order',
-                ],
-            ]
-        );
-    }
-
-    /**
+     * @magentoAppArea frontend
      * @magentoAppIsolation enabled
      * @magentoDbIsolation enabled
      * @magentoConfigFixture current_store payment/klarna_kco/active 1
@@ -196,7 +72,8 @@ class PushTest extends AbstractController
      */
     public function testExecuteShouldSuccessfullyCreateOrderByCheckoutApiResponse(): void
     {
-        $expectedResponse = '[]';
+        $expectedRedirect = 'checkout/klarna/success';
+        $expectedMessages = [];
         $klarnaOrderId = '123456-1234-1234-1234-1234567890';
 
         $this->assertOrderData(
@@ -257,25 +134,16 @@ class PushTest extends AbstractController
                 'status' => 'checkout_complete',
             ]);
 
-        $this->orderManagementMock->expects($this->any())->method('getOrder')
-            ->willReturn([
-                'order_id' => $klarnaOrderId,
-                'klarna_reference' => '12345',
-            ]);
-        $this->orderManagementMock->expects($this->any())->method('updateMerchantReferences')
-            ->willReturn([]);
-        $this->orderManagementMock->expects($this->any())->method('acknowledgeOrder')
-            ->willReturn(['is_successful' => true]);
-
-        $this->getRequest()->setMethod(Http::METHOD_POST);
-        $this->dispatch('kco/api/push/id/' . $klarnaOrderId);
-        $this->assertEquals($expectedResponse, $this->getResponse()->getBody());
+        $this->getRequest()->setMethod(Http::METHOD_GET);
+        $this->dispatch('checkout/klarna/confirmation/id/' . $klarnaOrderId);
+        $this->assertRedirect($this->stringContains($expectedRedirect));
+        $this->assertSessionMessages($this->equalTo($expectedMessages));
 
         $this->assertOrderData(
             $klarnaOrderId,
             [
                 'klarna_order_id' => $klarnaOrderId,
-                'is_acknowledged' => '1',
+                'is_acknowledged' => '0',
             ],
             [
                 'state' => 'processing',
@@ -285,7 +153,6 @@ class PushTest extends AbstractController
             [
                 'additional_information' => [
                     'method_title' => 'Kustom Checkout',
-                    'klarna_reference' => '12345',
                 ],
             ]
         );
@@ -298,9 +165,10 @@ class PushTest extends AbstractController
      * @magentoConfigFixture current_store general/region/state_required ''
      * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/quote_setup1_single_simple_product.php
      */
-    public function testExecuteShouldNotCreateOrderWhenCartIsLocked(): void
+    public function testExecuteShouldJustRedirectUserToSuccessPageWhenCartIsLocked(): void
     {
-        $expectedResponse = '{"error":"The cart is locked for processing. Please try again later."}';
+        $expectedRedirect = 'checkout/klarna/success';
+        $expectedMessages = [];
         $klarnaOrderId = '123456-1234-1234-1234-1234567890';
 
         $this->assertOrderData(
@@ -371,25 +239,121 @@ class PushTest extends AbstractController
                 'status' => 'checkout_complete',
             ]);
 
-        $this->orderManagementMock->expects($this->any())->method('getOrder')
-            ->willReturn([
-                'order_id' => $klarnaOrderId,
-                'klarna_reference' => '12345',
-            ]);
-        $this->orderManagementMock->expects($this->any())->method('updateMerchantReferences')
-            ->willReturn([]);
-        $this->orderManagementMock->expects($this->any())->method('acknowledgeOrder')
-            ->willReturn(['is_successful' => true]);
-
-        $this->getRequest()->setMethod(Http::METHOD_POST);
-        $this->dispatch('kco/api/push/id/' . $klarnaOrderId);
-        $this->assertEquals($expectedResponse, $this->getResponse()->getBody());
+        $this->getRequest()->setMethod(Http::METHOD_GET);
+        $this->dispatch('checkout/klarna/confirmation/id/' . $klarnaOrderId);
+        $this->assertRedirect($this->stringContains($expectedRedirect));
+        $this->assertSessionMessages($this->equalTo($expectedMessages));
 
         $this->assertOrderData(
             $klarnaOrderId,
             [],
             [],
             []
+        );
+    }
+
+    /**
+     * @magentoAppIsolation enabled
+     * @magentoDbIsolation enabled
+     * @magentoConfigFixture current_store payment/klarna_kco/active 1
+     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/klarna_order_setup1_single_simple_product.php
+     */
+    public function testExecuteShouldJustRedirectUserToSuccessPageWhenOrderAlreadyExists(): void
+    {
+        $expectedRedirect = 'checkout/klarna/success';
+        $expectedMessages = [];
+        $klarnaOrderId = '123456-1234-1234-1234-1234567890';
+
+        $this->assertOrderData(
+            $klarnaOrderId,
+            [
+                'klarna_order_id' => $klarnaOrderId,
+                'is_acknowledged' => '0',
+            ],
+            [
+                'state' => 'new',
+                'status' => 'pending',
+                'increment_id' => '100000001',
+            ],
+            [
+                'additional_information' => [
+                    'method_title' => 'Check / Money order',
+                ],
+            ]
+        );
+
+        $this->checkoutMock->expects($this->any())->method('getOrder')
+            ->willReturn([
+                'billing_address' => [
+                    'city' => 'City',
+                    'country' => 'US',
+                    'email' => 'customer@example.com',
+                    'family_name' => 'Lastname',
+                    'given_name' => 'Firstname',
+                    'phone' => '040123456',
+                    'postal_code' => '12345',
+                    'street_address' => 'Street',
+                    'region' => 'California',
+                ],
+                'shipping_address' => [
+                    'city' => 'City',
+                    'country' => 'US',
+                    'email' => 'customer@example.com',
+                    'family_name' => 'Lastname',
+                    'given_name' => 'Firstname',
+                    'phone' => '040123456',
+                    'postal_code' => '12345',
+                    'street_address' => 'Street',
+                    'region' => 'California',
+                ],
+                'order_id' => $klarnaOrderId,
+                'is_successful' => true,
+                'order_lines' => [
+                    [
+                        'image_url' => '',
+                        'name' => 'Simple Product',
+                        'product_url' => 'http://localhost/index.php/simple-product.html',
+                        'quantity' => 1,
+                        'reference' => 'simple',
+                        'tax_rate' => 0,
+                        'total_amount' => 1000,
+                        'total_discount_amount' => 0,
+                        'total_tax_amount' => 0,
+                        'type' => 'physical',
+                        'unit_price' => 1000,
+                    ]
+                ],
+                'selected_shipping_option' => [
+                    'id' => 'flatrate_flatrate',
+                    'price' => 500,
+                    'tax_amount' => 0,
+                    'tax_rate' => 0,
+                ],
+                'order_amount' => 1500,
+                'status' => 'checkout_complete',
+            ]);
+
+        $this->getRequest()->setMethod(Http::METHOD_GET);
+        $this->dispatch('checkout/klarna/confirmation/id/' . $klarnaOrderId);
+        $this->assertRedirect($this->stringContains($expectedRedirect));
+        $this->assertSessionMessages($this->equalTo($expectedMessages));
+
+        $this->assertOrderData(
+            $klarnaOrderId,
+            [
+                'klarna_order_id' => $klarnaOrderId,
+                'is_acknowledged' => '0',
+            ],
+            [
+                'state' => 'new',
+                'status' => 'pending',
+                'increment_id' => '100000001',
+            ],
+            [
+                'additional_information' => [
+                    'method_title' => 'Check / Money order',
+                ],
+            ]
         );
     }
 
@@ -399,7 +363,8 @@ class PushTest extends AbstractController
      */
     public function testExecuteShouldThrowAnErrorWhenIdMatchesNothing(): void
     {
-        $expectedResponse = '{"error":"Failed to create order"}';
+        $expectedRedirect = 'checkout/cart';
+        $expectedMessages = ['No Kustom Kco quote could be found with the provided Kustom order id: 123456-1234-1234-1234-1234567890'];
         $klarnaOrderId = '123456-1234-1234-1234-1234567890';
 
         $this->assertOrderData(
@@ -409,77 +374,25 @@ class PushTest extends AbstractController
             []
         );
 
-        $this->getRequest()->setMethod(Http::METHOD_POST);
-        $this->dispatch('kco/api/push/id/' . $klarnaOrderId);
-        $this->assertEquals($expectedResponse, $this->getResponse()->getBody());
-
-        $this->assertOrderData(
-            $klarnaOrderId,
-            [],
-            [],
-            []
-        );
+        $this->getRequest()->setMethod(Http::METHOD_GET);
+        $this->dispatch('checkout/klarna/confirmation/id/' . $klarnaOrderId);
+        $this->assertRedirect($this->stringContains($expectedRedirect));
+        $this->assertSessionMessages($this->equalTo($expectedMessages));
     }
 
     /**
      * @magentoAppIsolation enabled
      * @magentoDbIsolation enabled
-     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/klarna_order_setup1_single_simple_product.php
      */
-    public function testExecuteShouldNotCancelOrderDueToLocalizedException(): void
+    public function testExecuteShouldThrowAnErrorWhenNoIdIsGiven(): void
     {
-        $expectedResponse = '{"error":"Failed to update order state"}';
-        $klarnaOrderId = '123456-1234-1234-1234-1234567890';
+        $expectedRedirect = 'checkout/cart';
+        $expectedMessages = ['Unable to process order. Please try again'];
 
-        $this->assertOrderData(
-            $klarnaOrderId,
-            [
-                'klarna_order_id' => $klarnaOrderId,
-                'is_acknowledged' => '0',
-            ],
-            [
-                'state' => 'new',
-                'status' => 'pending',
-                'increment_id' => '100000001',
-            ],
-            [
-                'additional_information' => [
-                    'method_title' => 'Check / Money order',
-                ],
-            ]
-        );
-
-        $this->orderManagementMock->expects($this->any())->method('getOrder')
-            ->willReturn([
-                'captured_amount' => 0,
-                'captures' => [],
-                'klarna_reference' => '12345',
-            ]);
-        $this->orderManagementMock->expects($this->any())->method('updateMerchantReferences')
-            ->willThrowException(new LocalizedException(__('Test error')));
-        $this->orderManagementMock->expects($this->never())->method('cancelOrder');
-
-        $this->getRequest()->setMethod(Http::METHOD_POST);
-        $this->dispatch('kco/api/push/id/' . $klarnaOrderId);
-        $this->assertEquals($expectedResponse, $this->getResponse()->getBody());
-
-        $this->assertOrderData(
-            $klarnaOrderId,
-            [
-                'klarna_order_id' => $klarnaOrderId,
-                'is_acknowledged' => '0',
-            ],
-            [
-                'state' => 'new',
-                'status' => 'pending',
-                'increment_id' => '100000001',
-            ],
-            [
-                'additional_information' => [
-                    'method_title' => 'Check / Money order',
-                ],
-            ]
-        );
+        $this->getRequest()->setMethod(Http::METHOD_GET);
+        $this->dispatch('checkout/klarna/confirmation/id/');
+        $this->assertRedirect($this->stringContains($expectedRedirect));
+        $this->assertSessionMessages($this->equalTo($expectedMessages));
     }
 
     /**
@@ -488,9 +401,10 @@ class PushTest extends AbstractController
      * @magentoConfigFixture current_store payment/klarna_kco/active 1
      * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/quote_setup1_single_simple_product.php
      */
-    public function testExecuteShouldNotCancelOrderDueToLocalizedExceptionWhenCreatingOneWithCheckoutApiDetails(): void
+    public function testExecuteShouldNotCancelOrderDueToLocalizedException(): void
     {
-        $expectedResponse = '{"error":"Failed to create order"}';
+        $expectedRedirect = 'checkout/cart';
+        $expectedMessages = ['Test error'];
         $klarnaOrderId = '123456-1234-1234-1234-1234567890';
 
         $this->assertOrderData(
@@ -510,9 +424,10 @@ class PushTest extends AbstractController
             ]);
         $this->orderManagementMock->expects($this->never())->method('cancelOrder');
 
-        $this->getRequest()->setMethod(Http::METHOD_POST);
-        $this->dispatch('kco/api/push/id/' . $klarnaOrderId);
-        $this->assertEquals($expectedResponse, $this->getResponse()->getBody());
+        $this->getRequest()->setMethod(Http::METHOD_GET);
+        $this->dispatch('checkout/klarna/confirmation/id/' . $klarnaOrderId);
+        $this->assertRedirect($this->stringContains($expectedRedirect));
+        $this->assertSessionMessages($this->equalTo($expectedMessages));
 
         $this->assertOrderData(
             $klarnaOrderId,

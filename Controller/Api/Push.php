@@ -160,10 +160,7 @@ class Push extends CsrfAbstract implements HttpPostActionInterface
                 ['error' => $exception->getMessage()]
             );
         } catch (LocalizedException $e) {
-            // Before cancelling, check if a concurrent push already created the order successfully.
-            // If the Magento order exists, return success to avoid voiding a valid Klarna authorization.
-            $magentoOrder = $this->checkoutOrder->getMagentoOrder();
-            if ($magentoOrder !== null && $magentoOrder->getId()) {
+            if ($this->checkoutOrder->isMagentoOrderExists($klarnaOrderId)) {
                 $this->logger->debug('Push: Order already created by concurrent request: ' . $klarnaOrderId);
 
                 return true;
