@@ -42,6 +42,7 @@ class TitleHandlerTest extends TestCase
         $this->titleHandler = $this->objectManager->create(TitleHandler::class);
     }
 
+    #[DataProvider('handleDataProvider')]
     /**
      * @dataProvider handleDataProvider
      * @magentoAppIsolation enabled
