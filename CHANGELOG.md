@@ -1,3 +1,17 @@
+12.1.0 / 2026-06-24
+==================
+
+* KUSTOM-90: Updated workflow implementation to reset data on the workflow instance when new
+  order id is set, to prevent existing data from causing issues for example in loops.
+* KUSTOM-92: Refactored push controller to rely a little less on exceptions for logic flows. Also
+  removed logic to cancel orders on error since this isn't desired in the first place. Considering
+  exceptions are anyway unreliable for logic flows this has huge risk of prematurely cancelling
+  successfully placed orders. Applied similar changes also in confirmation controller.
+* KUSTOM-93: Loosened up PHP version constraint to allow installing the package on Magento 2.4.9
+  and PHP 8.5. Adjusted integration and unit tests in the package to run on currently supported
+  Magento, PHP and PHPUnit versions.
+* KUSTOM-94: Updated labels and strings from Klarna to Kustom in few places.
+
 12.0.23 / 2026-04-22
 ==================
 
