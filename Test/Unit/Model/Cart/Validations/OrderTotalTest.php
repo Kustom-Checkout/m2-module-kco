@@ -93,7 +93,7 @@ class OrderTotalTest extends TestCase
     {
         $this->expectException(\Klarna\Base\Exception::class);
         $this->expectExceptionMessage(
-            "Order total does not match for order #AN-ORDER-ID. Klarna total is 123 vs Magento total 135"
+            "Order total does not match for order #AN-ORDER-ID. Kustom total is 123 vs Magento total 135"
         );
         // Klarna Total
         $this->request->expects(static::once())

@@ -108,7 +108,7 @@ class ShippingMethodUpdate extends CsrfAbstract implements HttpPostActionInterfa
         $this->logger->info('ShippingMethodUpdate: start');
 
         $klarnaOrderId = $this->request->getParam('id');
-        $this->logger->info('ShippingMethodUpdate: klarna order id: ' . $klarnaOrderId);
+        $this->logger->info('ShippingMethodUpdate: Kustom order id: ' . $klarnaOrderId);
 
         try {
             $this->klarnaRequestQuoteTransformer->updateQuoteShippingMethod(

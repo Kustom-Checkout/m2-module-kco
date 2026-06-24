@@ -70,7 +70,7 @@ class ShippingAmount implements CheckoutValidationInterface
         $klarnaShippingAmount = $this->getShippingAmount($request, $quote);
         if ($quoteShippingAmount !== $klarnaShippingAmount) {
             $exceptionMessage = __(
-                'Shipping amount does not match for order %1. Klarna amount is %2 vs Magento amount is %3',
+                'Shipping amount does not match for order %1. Kustom amount is %2 vs Magento amount is %3',
                 $quote->getReservedOrderId(),
                 $klarnaShippingAmount,
                 $quoteShippingAmount

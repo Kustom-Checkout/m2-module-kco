@@ -63,7 +63,7 @@ class OrderItems implements CheckoutValidationInterface
             }
 
             $errorMessage = sprintf(
-                'Order items do not match for quote ID %s. Klarna order items are %s vs Magento order items %s',
+                'Order items do not match for quote ID %s. Kustom order items are %s vs Magento order items %s',
                 $quote->getId(),
                 json_encode($localOrderLines),
                 json_encode($request->getOrderLines())

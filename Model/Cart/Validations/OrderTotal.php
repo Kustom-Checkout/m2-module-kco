@@ -53,7 +53,7 @@ class OrderTotal implements CheckoutValidationInterface
 
         if ($klarnaTotal !== $quoteTotal) {
             $exceptionMessage = __(
-                'Order total does not match for order #%1. Klarna total is %2 vs Magento total %3',
+                'Order total does not match for order #%1. Kustom total is %2 vs Magento total %3',
                 $quote->getReservedOrderId(),
                 $klarnaTotal,
                 $quoteTotal
