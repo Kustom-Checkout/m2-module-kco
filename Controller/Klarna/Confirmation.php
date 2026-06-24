@@ -1,17 +1,18 @@
 <?php
+
 /**
  * Copyright © Klarna Bank AB (publ)
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
  */
+
 declare(strict_types=1);
 
 namespace Klarna\Kco\Controller\Klarna;
 
 use Klarna\Kco\Model\Checkout\Url;
 use Magento\Framework\App\Action\HttpGetActionInterface;
-use Magento\Framework\Controller\ResultInterface;
 use Magento\Framework\Exception\AlreadyExistsException;
 use Magento\Framework\Exception\NoSuchEntityException;
 use Klarna\Kco\Model\Order\Order as CheckoutOrder;
@@ -36,22 +37,27 @@ class Confirmation implements HttpGetActionInterface
      * @var Url
      */
     private $url;
+
     /**
      * @var CheckoutOrder
      */
     private $checkoutOrder;
+
     /**
      * @var LoggerInterface
      */
     private $logger;
+
     /**
      * @var RequestInterface
      */
     private RequestInterface $request;
+
     /**
      * @var RedirectFactory
      */
     private RedirectFactory $redirectFactory;
+
     /**
      * @var ManagerInterface
      */
@@ -64,7 +70,6 @@ class Confirmation implements HttpGetActionInterface
      * @param RequestInterface $request
      * @param RedirectFactory $redirectFactory
      * @param ManagerInterface $messageManager
-     * @codeCoverageIgnore
      */
     public function __construct(
         Url $url,
@@ -83,15 +88,12 @@ class Confirmation implements HttpGetActionInterface
     }
 
     /**
-     * Performing the confirmation action
-     *
-     * @return $this|ResultInterface
-     * @SuppressWarnings(PHPMD.ExcessiveMethodLength)
+     * @inheritDoc
      */
     public function execute()
     {
         $klarnaOrderId = $this->request->getParam('id');
-        $this->logger->debug('Klarna order id: ' . $klarnaOrderId);
+        $this->logger->debug('Kustom order id: ' . $klarnaOrderId);
 
         if (!$klarnaOrderId) {
             return $this->getInvalidOrderIdResponse();
@@ -102,18 +104,20 @@ class Confirmation implements HttpGetActionInterface
             $this->checkoutOrder->sendCustomerMail();
         } catch (CartLockedException $e) {
             $this->logger->debug('Confirmation: push running concurrently: ' . $klarnaOrderId . ' - Exception: ' . $e->getMessage());
+
             return $this->getSuccessResponse();
         } catch (AlreadyExistsException $e) {
-            return $this->getOrderAlreadyExistsResponse();
+            $this->logger->debug('Confirmation: push running concurrently: ' . $klarnaOrderId . ' - Exception: ' . $e->getMessage());
+
+            return $this->getSuccessResponse();
         } catch (LocalizedException $e) {
-            // Before cancelling, check if a concurrent push already created the order successfully.
-            // If the Magento order exists, return success to avoid voiding a valid Klarna authorization.
-            $magentoOrder = $this->checkoutOrder->getMagentoOrder();
-            if ($magentoOrder !== null && $magentoOrder->getId()) {
+            if ($this->checkoutOrder->isMagentoOrderExists($klarnaOrderId)) {
                 $this->logger->debug('Confirmation: Order already created by concurrent request: ' . $klarnaOrderId);
+
                 return $this->getSuccessResponse();
             }
-            return $this->getErrorResponse($e, $klarnaOrderId);
+
+            return $this->getErrorResponse($e);
         }
 
         return $this->getSuccessResponse();
@@ -127,6 +131,7 @@ class Confirmation implements HttpGetActionInterface
     private function getSuccessResponse(): Redirect
     {
         $this->logger->debug('Confirmation: Success');
+
         return $this->redirectFactory->create()->setPath(Url::CHECKOUT_ACTION_PREFIX . '/success');
     }
 
@@ -134,13 +139,12 @@ class Confirmation implements HttpGetActionInterface
      * Returning a general error response
      *
      * @param KlarnaException|NoSuchEntityException|CouldNotSaveException|LocalizedException $e
-     * @param string $klarnaOrderId
+     *
      * @return Redirect
      */
-    private function getErrorResponse($e, string $klarnaOrderId): Redirect
+    private function getErrorResponse($e): Redirect
     {
         $this->logger->critical($e);
-        $this->checkoutOrder->cancelKlarnaOrder($klarnaOrderId, $e->getMessage());
         $this->messageManager->addErrorMessage($e->getMessage());
 
         return $this->redirectFactory->create()->setUrl($this->url->getFailureUrl());
@@ -154,19 +158,7 @@ class Confirmation implements HttpGetActionInterface
     private function getInvalidOrderIdResponse(): Redirect
     {
         $this->messageManager->addErrorMessage(__('Unable to process order. Please try again'));
-        return $this->redirectFactory->create()->setUrl($this->url->getFailureUrl());
-    }
 
-    /**
-     * Returning a response for the case the order already exists
-     *
-     * @return Redirect
-     */
-    private function getOrderAlreadyExistsResponse(): Redirect
-    {
-        $this->logger->debug('Confirmation: Order already exist');
-
-        $this->messageManager->addErrorMessage(__('Order already exist.'));
         return $this->redirectFactory->create()->setUrl($this->url->getFailureUrl());
     }
 }
