@@ -97,6 +97,10 @@ class WorkflowProvider
         }
 
         $this->klarnaOrderId = $klarnaOrderId;
+        $this->kcoQuote = null;
+        $this->magentoQuote = null;
+        $this->klarnaOrder = null;
+        $this->magentoOrder = null;
     }
 
     /**
