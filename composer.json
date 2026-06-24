@@ -10,11 +10,11 @@
     },
     "require": {
         "ext-json": "*",
-        "vaimo/kustom-module-admin-settings": "^1",
-        "vaimo/kustom-module-base": "11.0.*",
-        "vaimo/kustom-module-kss": "3.0.*",
-        "vaimo/kustom-module-logger": "3.0.9",
-        "vaimo/kustom-module-orderlines": "3.0.*",
+        "kustom/module-admin-settings": "^1",
+        "kustom/module-base": "^11.0",
+        "kustom/module-kss": "^3.0",
+        "kustom/module-logger": "^3.0",
+        "kustom/module-orderlines": "^3.0",
         "magento/framework": "^103",
         "monolog/monolog": "^2.3 || ^3.9.0",
         "php": ">=7.4.0"
