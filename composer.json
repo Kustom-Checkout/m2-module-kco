@@ -1,5 +1,5 @@
 {
-   "name": "vaimo/kustom-module-kco",
+    "name": "kustom/module-kco",
     "description": "Kustom Checkout Magento 2 Extension",
     "type": "magento2-module",
     "license": "Apache-2.0",
@@ -23,6 +23,8 @@
         "psr-4": {
             "Klarna\\Kco\\": "."
         },
-        "files": [ "registration.php" ]
+        "files": [
+            "registration.php"
+        ]
     }
 }
