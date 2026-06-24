@@ -42,7 +42,7 @@ class DataProvider
      */
     public function getStoreCompanyIdAttributeCode(StoreInterface $store): string
     {
-        return $this->scopeConfig->getValue(
+        return (string) $this->scopeConfig->getValue(
             'checkout/' . PaymentKco::METHOD_CODE . '/business_id_attribute',
             ScopeInterface::SCOPE_STORES,
             $store
@@ -58,10 +58,7 @@ class DataProvider
     public function getKlarnaRequestCompanyId(DataObject $request): string
     {
         $customer = $request->getCustomer();
-        if (!isset($customer['organization_registration_id'])) {
-            return '';
-        }
 
-        return $customer['organization_registration_id'];
+        return (string) ($customer['organization_registration_id'] ?? '');
     }
 }

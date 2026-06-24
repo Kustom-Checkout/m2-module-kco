@@ -45,7 +45,7 @@ class FactoryTest extends TestCase
     protected function setUp(): void
     {
         $mockFactory = new MockFactory($this);
-        $objectFactory = new TestObjectFactory($mockFactory);
+        $objectFactory = new TestObjectFactory('');
 
         $this->storeMock = $mockFactory->create(Store::class);
 

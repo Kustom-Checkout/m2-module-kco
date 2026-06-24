@@ -513,7 +513,7 @@ class KasperTest extends TestCase
     protected function setUp(): void
     {
         $this->mockFactory = new MockFactory($this);
-        $objectFactory     = new TestObjectFactory($this->mockFactory);
+        $objectFactory     = new TestObjectFactory('');
 
         $this->storeMock          = $this->mockFactory->create(Store::class);
         $this->quoteMock          = $this->mockFactory->create(Quote::class);
