@@ -1,15 +1,19 @@
 <?php
+
 /**
  * Copyright © Klarna Bank AB (publ)
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
  */
+
 declare(strict_types=1);
 
 namespace Klarna\Kco\Block\Checkout;
 
+use Klarna\Base\Exception;
 use Klarna\Base\Model\Api\Rest\Service;
+use Klarna\Kco\Model\Checkout\Initialization;
 use Klarna\Kco\Model\Checkout\Initialization\Startup;
 use Klarna\Kco\Model\Checkout\Initialization\Update;
 use Klarna\Kco\Model\Checkout\Initialization\Validator;
@@ -18,11 +22,12 @@ use Klarna\Base\Helper\VersionInfo;
 use Magento\Checkout\Block\Checkout\LayoutProcessor;
 use Magento\Checkout\Model\Session;
 use Magento\Framework\App\Config\ScopeConfigInterface;
+use Magento\Framework\App\ObjectManager;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Message\ManagerInterface;
+use Magento\Quote\Api\Data\CartInterface;
 use Magento\Store\Api\Data\StoreInterface;
 use Magento\Store\Model\ScopeInterface;
-use Klarna\Base\Exception as KlarnaException;
 
 /**
  * @SuppressWarnings(PHPMD.CookieAndSessionMisuse)
@@ -35,34 +40,31 @@ class LayoutProcessorPlugin
      * @var Session
      */
     private $session;
+
     /**
      * @var ManagerInterface
      */
     private $manager;
+
     /**
      * @var kcoInitializer
      */
     private $kcoInitializer;
+
     /**
      * @var VersionInfo
      */
     private $info;
+
     /**
      * @var ScopeConfigInterface
      */
     private $config;
+
     /**
-     * @var Update
+     * @var Initialization|null
      */
-    private Update $update;
-    /**
-     * @var Startup
-     */
-    private Startup $startup;
-    /**
-     * @var Validator
-     */
-    private Validator $validator;
+    private ?Initialization $sessionInit;
 
     /**
      * @param Session $session
@@ -73,8 +75,7 @@ class LayoutProcessorPlugin
      * @param Update $update
      * @param Startup $startup
      * @param Validator $validator
-     * @throws \Magento\Framework\Exception\NoSuchEntityException
-     * @codeCoverageIgnore
+     * @param Initialization|null $sessionInit
      */
     public function __construct(
         Session $session,
@@ -82,18 +83,18 @@ class LayoutProcessorPlugin
         kcoInitializer $kcoInitializer,
         VersionInfo $info,
         ScopeConfigInterface $config,
-        Update $update,
-        Startup $startup,
-        Validator $validator
+        Update $update, // TODO: Remove, left for backwards compatibility
+        Startup $startup, // TODO: Remove, left for backwards compatibility
+        Validator $validator, // TODO: Remove, left for backwards compatibility
+        ?Initialization $sessionInit = null
     ) {
         $this->session = $session;
         $this->manager = $manager;
         $this->kcoInitializer = $kcoInitializer;
         $this->info = $info;
         $this->config = $config;
-        $this->update = $update;
-        $this->startup = $startup;
-        $this->validator = $validator;
+        // TODO: Remove OM usage in next major release, done for backwards compatibility
+        $this->sessionInit = $sessionInit ?: ObjectManager::getInstance()->get(Initialization::class);
     }
 
     /**
@@ -120,21 +121,16 @@ class LayoutProcessorPlugin
     /**
      * Returns iframe snippet of checkout form
      *
-     * @param \Magento\Quote\Api\Data\CartInterface $quote
+     * @param CartInterface $quote
+     *
      * @return string
      * @throws LocalizedException
-     * @throws \Klarna\Base\Exception
+     * @throws Exception
      */
     private function generateKlarnaIframe($quote)
     {
         try {
-            if ($this->validator->isCheckoutAllowedForCustomer()) {
-                if ($this->validator->isKlarnaSessionRunning()) {
-                    $this->update->updateKlarnaSession();
-                } else {
-                    $this->startup->createKlarnaSession();
-                }
-            }
+            $this->sessionInit->createUpdateKlarnaSession();
         } catch (\Throwable $e) {
             if ($e->getCode() === Service::HTTP_UNAUTHORIZED) {
                 return __(
