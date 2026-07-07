@@ -1,17 +1,18 @@
 <?php
+
 /**
  * Copyright © Klarna Bank AB (publ)
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
  */
+
 declare(strict_types=1);
 
 namespace Klarna\Kco\Model\Checkout\Checkbox;
 
 use Klarna\Kco\Model\Checkout\Configuration\SettingsProvider;
 use Magento\Quote\Api\Data\CartInterface;
-use Magento\Framework\App\ObjectManager;
 use Klarna\Kco\Helper\KlarnaConfig as KcoKlarnaConfig;
 
 /**
@@ -23,6 +24,7 @@ class DataProvider
      * @var SettingsProvider
      */
     private SettingsProvider $config;
+
     /**
      * @var KcoKlarnaConfig
      */
@@ -31,7 +33,6 @@ class DataProvider
     /**
      * @param SettingsProvider $config
      * @param KcoKlarnaConfig $klarnaConfig
-     * @codeCoverageIgnore
      */
     public function __construct(SettingsProvider $config, KcoKlarnaConfig $klarnaConfig)
     {
@@ -51,13 +52,12 @@ class DataProvider
     {
         $store = $quote->getStore();
         $checkboxes = [];
-        $checkboxesConfigs = json_decode(
-            $this->config->getCheckoutConfig(
-                'custom_checkboxes',
-                $store
-            ),
-            true
+
+        $configValue = $this->config->getCheckoutConfig(
+            'custom_checkboxes',
+            $store
         );
+        $checkboxesConfigs = json_decode($configValue === '' ? '[]' : $configValue, true);
 
         if (count($checkboxesConfigs) === 0) {
             return [];
@@ -68,6 +68,7 @@ class DataProvider
             $checkboxesConfig['required'] = (bool)$checkboxesConfig['required'];
             $checkboxes[] = $checkboxesConfig;
         }
+
         return $checkboxes;
     }
 
@@ -87,6 +88,7 @@ class DataProvider
         }
 
         $methodConfig = $this->klarnaConfig->getMerchantCheckboxMethodConfig($code);
-        return $methodConfig->getText();
+
+        return (string) $methodConfig->getText();
     }
 }

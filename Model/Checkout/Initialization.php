@@ -18,6 +18,10 @@ use Klarna\Kco\Model\Checkout\Initialization\Validator;
 
 class Initialization
 {
+    public const STATE_NONE = 0;
+    public const STATE_CREATE = 1;
+    public const STATE_UPDATE = 2;
+
     /**
      * @var Update
      */
@@ -51,21 +55,23 @@ class Initialization
     /**
      * If allowed, initialize new session or update the existing one
      *
-     * @return void
+     * @return int
      * @throws Exception
      */
-    public function createUpdateKlarnaSession(): void
+    public function createUpdateKlarnaSession(): int
     {
         if (!$this->validator->isCheckoutAllowedForCustomer()) {
-            return;
+            return self::STATE_NONE;
         }
 
         if ($this->validator->isKlarnaSessionRunning()) {
             $this->update->updateKlarnaSession();
 
-            return;
+            return self::STATE_UPDATE;
         }
 
         $this->startup->createKlarnaSession();
+
+        return self::STATE_CREATE;
     }
 }

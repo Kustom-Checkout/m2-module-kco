@@ -13,7 +13,6 @@ namespace Klarna\Kco\Model\Checkout;
 
 use Klarna\Base\Exception;
 use Klarna\Kco\Model\Api\Factory;
-use Magento\Framework\App\ObjectManager;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Store\Api\Data\StoreInterface;
 
@@ -55,7 +54,8 @@ class FullCheckout
         $this->sessionInit->createUpdateKlarnaSession();
 
         $apiInstance = $this->apiFactory->createApiInstance($store);
+        $order = $apiInstance->getKlarnaOrder();
 
-        return (string) $apiInstance->getKlarnaOrder()->getFullCheckoutUri();
+        return (string) $order->getFullCheckoutUri();
     }
 }
