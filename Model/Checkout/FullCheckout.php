@@ -51,7 +51,10 @@ class FullCheckout
      */
     public function generateFullCheckoutUrl(StoreInterface $store): string
     {
-        $this->sessionInit->createUpdateKlarnaSession();
+        $state = $this->sessionInit->createUpdateKlarnaSession();
+        if ($state === Initialization::STATE_NONE) {
+            return '';
+        }
 
         $apiInstance = $this->apiFactory->createApiInstance($store);
         $order = $apiInstance->getKlarnaOrder();

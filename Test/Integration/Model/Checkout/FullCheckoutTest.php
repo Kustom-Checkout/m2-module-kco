@@ -68,6 +68,7 @@ class FullCheckoutTest extends TestCase
     /**
      * @magentoAppIsolation enabled
      * @magentoDbIsolation enabled
+     * @magentoConfigFixture current_store checkout/klarna_kco/guest_checkout 1
      */
     public function testGenerateFullCheckoutUrlShouldReturnFullCheckoutUrlBasedOnCreateOrderApiResponse(): void
     {
@@ -82,6 +83,25 @@ class FullCheckoutTest extends TestCase
                 'is_successful' => true,
                 'full_checkout_uri' => $expectedUrl,
             ]);
+
+        $url = $this->model->generateFullCheckoutUrl($this->storeManager->getStore());
+        $this->assertEquals($expectedUrl, $url);
+    }
+
+    /**
+     * @magentoAppIsolation enabled
+     * @magentoDbIsolation enabled
+     * @magentoConfigFixture current_store checkout/klarna_kco/guest_checkout 0
+     */
+    public function testGenerateFullCheckoutUrlShouldReturnEmptyStringIfInitializationIsNotDone(): void
+    {
+        $expectedUrl = '';
+
+        $quote = $this->checkoutSession->getQuote();
+        $quote->save();
+
+        $this->checkoutApiMock->expects($this->never())->method('createOrder');
+        $this->checkoutApiMock->expects($this->never())->method('updateOrder');
 
         $url = $this->model->generateFullCheckoutUrl($this->storeManager->getStore());
         $this->assertEquals($expectedUrl, $url);

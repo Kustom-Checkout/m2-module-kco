@@ -15,6 +15,7 @@ use Klarna\AdminSettings\Model\Configurations\Kco\Checkout;
 use Klarna\Base\Exception;
 use Klarna\Kco\Model\Checkout\Configuration\SettingsProvider;
 use Klarna\Kco\Model\Checkout\FullCheckout;
+use Klarna\Logger\Api\LoggerInterface;
 use Klarna\PluginsApi\Model\Update\Validator;
 use Magento\Checkout\Model\Session;
 use Magento\Framework\App\ObjectManager;
@@ -22,9 +23,12 @@ use Magento\Framework\Event\Manager;
 use Magento\Framework\Event\Observer;
 use Magento\Framework\Event\ObserverInterface;
 use Magento\Framework\Exception\LocalizedException;
+use Magento\Framework\Message\ManagerInterface;
 use Magento\Framework\Url;
 use Magento\Framework\DataObjectFactory;
 use Magento\Store\Api\Data\StoreInterface;
+
+use function __;
 
 /**
  * This observer will be called when a customer reaches/opens the default Magento checkout page.
@@ -76,6 +80,16 @@ class LoadKlarnaCheckout implements ObserverInterface
     private FullCheckout $fullCheckout;
 
     /**
+     * @var ManagerInterface
+     */
+    private ManagerInterface $messageManager;
+
+    /**
+     * @var LoggerInterface
+     */
+    private LoggerInterface $logger;
+
+    /**
      * @param Manager $manager
      * @param Url $urlModel
      * @param Session $session
@@ -84,6 +98,8 @@ class LoadKlarnaCheckout implements ObserverInterface
      * @param Validator $pluginsApiValidator
      * @param Checkout|null $checkoutConfig
      * @param FullCheckout|null $fullCheckout
+     * @param ManagerInterface|null $messageManager
+     * @param LoggerInterface|null $logger
      */
     public function __construct(
         Manager $manager,
@@ -93,7 +109,9 @@ class LoadKlarnaCheckout implements ObserverInterface
         DataObjectFactory $dataObjectFactory,
         Validator $pluginsApiValidator,
         ?Checkout $checkoutConfig = null,
-        ?FullCheckout $fullCheckout = null
+        ?FullCheckout $fullCheckout = null,
+        ?ManagerInterface $messageManager = null,
+        ?LoggerInterface $logger = null
     ) {
         $this->config = $config;
         $this->url = $urlModel;
@@ -105,6 +123,8 @@ class LoadKlarnaCheckout implements ObserverInterface
         // TODO: Remove OM usage in next major release, done for backwards compatibility
         $this->checkoutConfig = $checkoutConfig ?: ObjectManager::getInstance()->get(Checkout::class);
         $this->fullCheckout = $fullCheckout ?: ObjectManager::getInstance()->get(FullCheckout::class);
+        $this->messageManager = $messageManager ?: ObjectManager::getInstance()->get(ManagerInterface::class);
+        $this->logger = $logger ?: ObjectManager::getInstance()->get(LoggerInterface::class);
     }
 
     /**
@@ -114,14 +134,20 @@ class LoadKlarnaCheckout implements ObserverInterface
      */
     public function execute(Observer $observer)
     {
-        $store = $this->checkoutSession->getQuote()->getStore();
-        if ($this->pluginsApiValidator->isPspMerchantByStore($store)) {
-            return;
-        }
+        try {
+            $store = $this->checkoutSession->getQuote()->getStore();
+            if ($this->pluginsApiValidator->isPspMerchantByStore($store)) {
+                return;
+            }
 
-        $redirectUrl = $this->getRedirectUrl($observer, $store);
-        if (!$redirectUrl) {
-            return;
+            $redirectUrl = $this->getRedirectUrl($observer, $store);
+            if (!$redirectUrl) {
+                return;
+            }
+        } catch (\Throwable $exception) {
+            $this->logger->critical($exception->getMessage());
+            $this->messageManager->addErrorMessage(__('Kustom Checkout has failed to load'));
+            $redirectUrl = $this->url->getRouteUrl('checkout/cart');
         }
 
         $observer->getControllerAction()->getResponse()

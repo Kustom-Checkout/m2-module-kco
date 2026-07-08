@@ -121,4 +121,28 @@ class LoadKlarnaCheckoutTest extends AbstractController
         $this->dispatch('checkout/index/index');
         $this->assertFalse($this->getResponse()->isRedirect());
     }
+
+    /**
+     * @magentoAppArea frontend
+     * @magentoAppIsolation enabled
+     * @magentoDbIsolation enabled
+     * @magentoConfigFixture current_store payment/klarna_kco/active 1
+     * @magentoConfigFixture current_store checkout/klarna_kco/use_full_checkout 1
+     * @magentoConfigFixture current_store klarna/api/debug 1
+     * @magentoConfigFixture current_store general/region/state_required ''
+     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/quote_setup1_single_simple_product.php
+     */
+    public function testLoadKlarnaCheckoutShouldRedirectToCartWithErrorMessageWhenApiCallsFailWithFullCheckout(): void
+    {
+        $quote = $this->quoteGetter->execute('100000001');
+        $this->checkoutSession->replaceQuote($quote);
+
+        $this->checkoutApiMock->expects($this->atLeastOnce())->method('updateOrder')
+            ->willThrowException(new \Exception('Test'));
+
+        $this->getRequest()->setMethod(Http::METHOD_GET);
+        $this->dispatch('checkout/index/index');
+        $this->assertRedirect($this->stringContains('checkout/cart'));
+        $this->assertSessionMessages($this->equalTo(['Kustom Checkout has failed to load']));
+    }
 }
