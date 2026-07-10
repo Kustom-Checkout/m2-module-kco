@@ -85,7 +85,6 @@ class ShippingMethodUpdateTest extends AbstractController
         $this->checkoutSession->replaceQuote($quote);
 
         $this->getRequest()->setContent(json_encode([
-            'id' => $klarnaOrderId,
             'selected_shipping_option' => [
                 'id' => 'flatrate_flatrate',
             ],
@@ -167,7 +166,6 @@ class ShippingMethodUpdateTest extends AbstractController
         $this->checkoutSession->replaceQuote($quote);
 
         $this->getRequest()->setContent(json_encode([
-            'id' => $klarnaOrderId,
             'selected_shipping_option' => $selectedShipping,
         ]));
         $this->getRequest()->setMethod(Http::METHOD_POST);

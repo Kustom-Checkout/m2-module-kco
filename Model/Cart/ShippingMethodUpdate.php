@@ -51,6 +51,7 @@ class ShippingMethodUpdate implements ShippingMethodUpdateInterface
     public function updateByRequest(RequestInterface $request): int
     {
         $data = $this->klarna->getKlarnaRequestBody($request);
+        $data['id'] = $request->getParam('id');
 
         return $this->updateByData($data);
     }
