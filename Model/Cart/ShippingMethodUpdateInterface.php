@@ -11,13 +11,9 @@ declare(strict_types=1);
 
 namespace Klarna\Kco\Model\Cart;
 
-use Klarna\Kco\Model\Cart\ShippingMethodUpdater\UpdaterComponentInterface;
-use Klarna\Kco\Model\Responder\Klarna;
 use Magento\Framework\App\RequestInterface;
 use Magento\Framework\DataObject;
 use Magento\Framework\Exception\InputException;
-
-use function uasort;
 
 interface ShippingMethodUpdateInterface
 {

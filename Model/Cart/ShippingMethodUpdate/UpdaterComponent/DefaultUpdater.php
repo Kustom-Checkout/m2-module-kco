@@ -44,7 +44,7 @@ class DefaultUpdater implements UpdaterComponentInterface
     /**
      * @inheritDoc
      */
-    public function getSortOrder(): int
+    public function getSortOrder(): ?int
     {
         return 100;
     }

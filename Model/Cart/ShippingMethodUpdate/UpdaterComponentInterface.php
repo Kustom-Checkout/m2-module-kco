@@ -21,9 +21,9 @@ interface UpdaterComponentInterface
     public function isRelevant(): bool;
 
     /**
-     * @return int
+     * @return int|null
      */
-    public function getSortOrder(): int;
+    public function getSortOrder(): ?int;
 
     /**
      * @param DataObject $data
