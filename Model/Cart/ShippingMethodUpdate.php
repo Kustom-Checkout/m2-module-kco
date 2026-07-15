@@ -82,6 +82,8 @@ class ShippingMethodUpdate implements ShippingMethodUpdateInterface
     }
 
     /**
+     * Returns $updaterComponents property values in the order determined by getSortOrder
+     *
      * @return UpdaterComponentInterface[]
      */
     private function getSortedUpdaterComponents(): array

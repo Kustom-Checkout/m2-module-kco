@@ -78,7 +78,8 @@ class LayoutProcessorPluginTest extends TestCase
             ]);
 
         $result = $this->model->process($this->generateDummyJsLayout());
-        $htmlSnippet = $result['components']['checkout']['children']['steps']['children']['klarna_kco']['klarna_iframe'] ?? '';
+        $steps = $result['components']['checkout']['children']['steps'] ?? [];
+        $htmlSnippet = $steps['children']['klarna_kco']['klarna_iframe'] ?? '';
         $this->assertEquals($expectedHtmlSnippet, $htmlSnippet);
     }
 

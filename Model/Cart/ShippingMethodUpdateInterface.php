@@ -18,6 +18,8 @@ use Magento\Framework\Exception\InputException;
 interface ShippingMethodUpdateInterface
 {
     /**
+     * Executes shipping method update based on given request data
+     *
      * @param RequestInterface $request
      *
      * @return int
@@ -26,6 +28,8 @@ interface ShippingMethodUpdateInterface
     public function updateByRequest(RequestInterface $request): int;
 
     /**
+     * Executes shipping method update based on given data
+     *
      * @param DataObject $data
      *
      * @return int

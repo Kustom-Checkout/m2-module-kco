@@ -16,16 +16,22 @@ use Magento\Framework\DataObject;
 interface UpdaterComponentInterface
 {
     /**
+     * Whether executeByData() is relevant to execute
+     *
      * @return bool
      */
     public function isRelevant(): bool;
 
     /**
+     * Position of this component in relation to other implementations of this interface
+     *
      * @return int|null
      */
     public function getSortOrder(): ?int;
 
     /**
+     * Executes shipping method update related processes based on the given data
+     *
      * @param DataObject $data
      *
      * @return int

@@ -128,8 +128,6 @@ class LoadKlarnaCheckout implements ObserverInterface
     }
 
     /**
-     * Loading the klarna checkout
-     *
      * @inheritDoc
      */
     public function execute(Observer $observer)
@@ -159,6 +157,8 @@ class LoadKlarnaCheckout implements ObserverInterface
     // Cleans up also the constructor and we would do changes there in next major release anyway.
 
     /**
+     * Resolves the url to redirect the user to for checkout experience
+     *
      * @param Observer $observer TODO: Needed for getKlarnaCheckoutUrl, should be removed
      * @param StoreInterface $store
      *
@@ -181,6 +181,8 @@ class LoadKlarnaCheckout implements ObserverInterface
     }
 
     /**
+     * Resolves url for Kustom checkout while leaving an extension point to update this
+     *
      * @param Observer $observer TODO: Needed for backwards compatibility (event dispatch), should be removed
      * @param StoreInterface $store
      *
