@@ -17,7 +17,9 @@ use Klarna\Orderlines\Model\Container\Parameter;
 use Magento\Framework\DataObject;
 use Magento\Quote\Api\Data\CartInterface;
 
+use function __;
 use function json_encode;
+use function sprintf;
 use function trim;
 
 /**
@@ -39,9 +41,9 @@ class OrderItems implements CheckoutValidationInterface
     }
 
     /**
-     * Checking if on the quote and the Klarna request there are the same items
-     *
      * @inheritDoc
+     *
+     * Checking if on the quote and the Klarna request there are the same items
      */
     public function validate(DataObject $request, CartInterface $quote): void
     {
