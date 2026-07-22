@@ -171,6 +171,19 @@ class OrderItemsTest extends TestCase
                     ],
                 ],
             ],
+            'should not crash due to null name but throw the usual exception' => [
+                'requestData' => [
+                    'order_lines' => [
+                        [
+                            'name' => null,
+                            'product_url' => 'http://localhost/index.php/simple-product.html',
+                            'quantity' => '1.0000',
+                        ],
+                    ],
+                ],
+                'expectedException' => Exception::class,
+                'expectedMessage' => '/Order items do not match/',
+            ],
         ];
     }
 }

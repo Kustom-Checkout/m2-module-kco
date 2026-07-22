@@ -1,20 +1,24 @@
 <?php
+
 /**
  * Copyright © Klarna Bank AB (publ)
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
  */
+
 declare(strict_types=1);
 
 namespace Klarna\Kco\Model\Cart\Validations;
 
 use Klarna\Base\Exception as KlarnaException;
-use Klarna\Base\Model\Api\OrderLineProcessor;
 use Klarna\Kco\Api\CheckoutValidationInterface;
 use Klarna\Orderlines\Model\Container\Parameter;
 use Magento\Framework\DataObject;
 use Magento\Quote\Api\Data\CartInterface;
+
+use function json_encode;
+use function trim;
 
 /**
  * @internal
@@ -28,7 +32,6 @@ class OrderItems implements CheckoutValidationInterface
 
     /**
      * @param Parameter $parameter
-     * @codeCoverageIgnore
      */
     public function __construct(Parameter $parameter)
     {
@@ -38,9 +41,7 @@ class OrderItems implements CheckoutValidationInterface
     /**
      * Checking if on the quote and the Klarna request there are the same items
      *
-     * @param DataObject $request
-     * @param CartInterface $quote
-     * @throws KlarnaException
+     * @inheritDoc
      */
     public function validate(DataObject $request, CartInterface $quote): void
     {
@@ -53,10 +54,12 @@ class OrderItems implements CheckoutValidationInterface
             if (!$this->isProductUrlGiven($localOrderLine)) {
                 continue;
             }
+
             foreach ($request->getOrderLines() as $requestOrderLine) {
                 if (!$this->isProductUrlGiven($requestOrderLine)) {
                     continue;
                 }
+
                 if ($this->isItemFound($localOrderLine, $requestOrderLine)) {
                     continue 2;
                 }
@@ -75,7 +78,8 @@ class OrderItems implements CheckoutValidationInterface
     /**
      * Returns true if the product url is given which means that the order line item is a product
      *
-     * @param array $orderLineItem
+     * @param mixed[] $orderLineItem
+     *
      * @return bool
      */
     private function isProductUrlGiven(array $orderLineItem): bool
@@ -86,14 +90,15 @@ class OrderItems implements CheckoutValidationInterface
     /**
      * Returns true if  a match between the local order line item and the request order line item was found.
      *
-     * @param array $localOrderLine
-     * @param array $requestOrderLine
+     * @param mixed[] $localOrderLine
+     * @param mixed[] $requestOrderLine
+     *
      * @return bool
      */
     private function isItemFound(array $localOrderLine, array $requestOrderLine): bool
     {
-        return $localOrderLine['name'] === $requestOrderLine['name'] &&
+        return trim((string) $localOrderLine['name']) === trim((string) $requestOrderLine['name']) &&
             $localOrderLine['product_url'] === $requestOrderLine['product_url'] &&
-            $localOrderLine['quantity'] === $requestOrderLine['quantity'];
+            (float) $localOrderLine['quantity'] === (float) $requestOrderLine['quantity'];
     }
 }
