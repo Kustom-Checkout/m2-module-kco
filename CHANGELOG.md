@@ -1,5 +1,19 @@
 # Changelog
 
+## 12.1.1 / 2026-08-10
+
+### Breaking changes
+
+* None
+
+### Features / changes
+
+* None
+
+### Fixes
+
+* KUSTOM-46: Fix where product names and space cause problems with new Kustom module.
+
 ## 12.1.0 / 2026-06-24
 
 ### Breaking changes
