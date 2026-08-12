@@ -578,6 +578,10 @@ class Kasper implements BuilderInterface
             $options['allowed_customer_types'] = ['person', 'organization'];
         }
 
+        if ($this->shippingOptionsConfiguration->isTmsConfigurationOverrideDisabled($store)) {
+            $options['tms_configuration_override'] = ['disabled' => true];
+        }
+
         $additionalCheckboxes = $this->dataProvider->getAdditionalCheckboxes($quote);
         if ($additionalCheckboxes && count($additionalCheckboxes) > 0) {
             $options['additional_checkboxes'] = $additionalCheckboxes;
