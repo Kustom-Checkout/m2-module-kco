@@ -1,6 +1,6 @@
 # Changelog
 
-## 12.2.0 / 2026-08-12
+## 12.3.0 / 2026-08-14
 
 ### Breaking changes
 
@@ -8,11 +8,25 @@
 
 ### Features / changes
 
-* KUSTOM-89: Read `tos_id`, `carrier` and pickup location name from the placed Kustom order's
-  `selected_shipping_option` (Order Management API response) and store them on the `klarna_core_order` entity
-  (requires `kustom/module-base` ^11.2), alongside the raw `selected_shipping_option` object as JSON.
+* KUSTOM-89: Read and store additional shipping details from Kustom order's
+  `selected_shipping_option` (Order Management API response) — including carrier, tosId,
+  and pickup location name alongside the raw `selected_shipping_option` object as JSON.
 * KUSTOM-89: Added a per-store admin setting to optionally send `options.tms_configuration_override.disabled`
   on checkout create/update requests, for merchants migrating from a standalone Ingrid iframe integration.
+
+### Fixes
+
+* None
+
+## 12.2.0 / 2026-08-14
+
+### Breaking changes
+
+* None
+
+### Features / changes
+
+* KUSTOM-96: Support for the full checkout feature
 
 ### Fixes
 

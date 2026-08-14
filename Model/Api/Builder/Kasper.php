@@ -587,6 +587,8 @@ class Kasper implements BuilderInterface
             $options['additional_checkboxes'] = $additionalCheckboxes;
         }
 
+        $options['full_checkout'] = $this->checkoutConfiguration->isUseFullCheckout($store);
+
         return $options;
     }
 

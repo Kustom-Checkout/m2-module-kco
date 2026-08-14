@@ -119,4 +119,16 @@
     <type name="Magento\Shipping\Model\CarrierFactory">
         <plugin sortOrder="1" name="klarnaKcoShippingGatewayCarrierFactory" type="Klarna\Kco\Plugin\ShippingMethodGateway\CarrierFactoryPlugin"/>
     </type>
+
+    <!-- SHIPPING METHOD UPDATER -->
+
+    <preference for="Klarna\Kco\Model\Cart\ShippingMethodUpdateInterface" type="Klarna\Kco\Model\Cart\ShippingMethodUpdate" />
+
+    <type name="Klarna\Kco\Model\Cart\ShippingMethodUpdate">
+        <arguments>
+            <argument name="updaterComponents" xsi:type="array">
+                <item name="default_updater" xsi:type="object">Klarna\Kco\Model\Cart\ShippingMethodUpdate\UpdaterComponent\DefaultUpdater</item>
+            </argument>
+        </arguments>
+    </type>
 </config>

@@ -1,10 +1,12 @@
 <?php
+
 /**
  * Copyright © Klarna Bank AB (publ)
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
  */
+
 declare(strict_types=1);
 
 namespace Klarna\Kco\Controller\Api;
@@ -17,12 +19,14 @@ use Klarna\Logger\Model\Api\Container;
 use Klarna\Base\Model\Responder\Result;
 use Klarna\Kco\Model\Responder\Klarna;
 use Magento\Framework\App\Action\HttpPostActionInterface;
+use Magento\Framework\App\ObjectManager;
 use Magento\Framework\Exception\LocalizedException;
 use Klarna\Logger\Api\LoggerInterface;
 use Klarna\Kco\Model\Checkout\Kco\Initializer as kcoInitializer;
 use Magento\Framework\Controller\Result\Json;
 use Magento\Framework\App\RequestInterface;
 use Klarna\Base\Controller\CsrfAbstract;
+use Klarna\Kco\Model\Cart\ShippingMethodUpdateInterface;
 
 /**
  * API call to set shipping method on a customers quote via callback from Klarna
@@ -36,34 +40,46 @@ class ShippingMethodUpdate extends CsrfAbstract implements HttpPostActionInterfa
      * @var LoggerInterface
      */
     private $logger;
+
     /**
      * @var kcoInitializer
      */
     private $kcoInitializer;
+
     /**
      * @var Result
      */
     private $result;
+
     /**
      * @var Klarna
      */
     private $klarna;
+
     /**
      * @var Logger
      */
     private $apiLogger;
+
     /**
      * @var Container
      */
     private $container;
+
     /**
      * @var KlarnaRequestQuoteTransformer
      */
     private KlarnaRequestQuoteTransformer $klarnaRequestQuoteTransformer;
+
     /**
      * @var RequestInterface
      */
     private RequestInterface $request;
+
+    /**
+     * @var ShippingMethodUpdateInterface|null
+     */
+    private ?ShippingMethodUpdateInterface $methodUpdater;
 
     /**
      * @param LoggerInterface $logger
@@ -74,8 +90,8 @@ class ShippingMethodUpdate extends CsrfAbstract implements HttpPostActionInterfa
      * @param Container $container
      * @param KlarnaRequestQuoteTransformer $klarnaRequestQuoteTransformer
      * @param RequestInterface $request
+     * @param ShippingMethodUpdateInterface|null $methodUpdater
      * @SuppressWarnings(PHPMD.ExcessiveParameterList)
-     * @codeCoverageIgnore
      */
     public function __construct(
         LoggerInterface $logger,
@@ -85,16 +101,22 @@ class ShippingMethodUpdate extends CsrfAbstract implements HttpPostActionInterfa
         Logger $apiLogger,
         Container $container,
         KlarnaRequestQuoteTransformer $klarnaRequestQuoteTransformer,
-        RequestInterface $request
+        RequestInterface $request,
+        ?ShippingMethodUpdateInterface $methodUpdater = null
     ) {
-        $this->logger           = $logger;
-        $this->kcoInitializer   = $kcoInitializer;
-        $this->result           = $result;
-        $this->klarna           = $klarna;
-        $this->apiLogger        = $apiLogger;
-        $this->container        = $container;
-        $this->klarnaRequestQuoteTransformer = $klarnaRequestQuoteTransformer;
+        $this->logger = $logger;
+        $this->kcoInitializer = $kcoInitializer;
+        $this->result = $result;
+        $this->apiLogger = $apiLogger;
+        $this->container = $container;
         $this->request = $request;
+
+        // TODO: Remove on next major release since these are unused, left for backwards compatibility
+        $this->klarna = $klarna;
+        $this->klarnaRequestQuoteTransformer = $klarnaRequestQuoteTransformer;
+
+        // TODO: Remove OM usage in next major release, done for backwards compatibility
+        $this->methodUpdater = $methodUpdater ?: ObjectManager::getInstance()->get(ShippingMethodUpdateInterface::class);
     }
 
     /**
@@ -111,12 +133,10 @@ class ShippingMethodUpdate extends CsrfAbstract implements HttpPostActionInterfa
         $this->logger->info('ShippingMethodUpdate: Kustom order id: ' . $klarnaOrderId);
 
         try {
-            $this->klarnaRequestQuoteTransformer->updateQuoteShippingMethod(
-                $this->klarna->getKlarnaRequestBody($this->request),
-                $klarnaOrderId
-            );
+            $this->methodUpdater->updateByRequest($this->request);
         } catch (LocalizedException $e) {
             $this->logCallbackException($e);
+            $this->logger->error('ShippingMethodUpdate error: ' . $e->getTraceAsString());
             return $this->getFailureResult($e->getMessage(), 400);
         }
 
