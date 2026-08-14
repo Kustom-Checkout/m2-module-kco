@@ -1,0 +1,39 @@
+<?php
+
+/**
+ * Copyright © Klarna Bank AB (publ)
+ *
+ * For the full copyright and license information, please view the NOTICE
+ * and LICENSE files that were distributed with this source code.
+ */
+
+declare(strict_types=1);
+
+namespace Klarna\Kco\Model\Cart;
+
+use Magento\Framework\App\RequestInterface;
+use Magento\Framework\DataObject;
+use Magento\Framework\Exception\InputException;
+
+interface ShippingMethodUpdateInterface
+{
+    /**
+     * Executes shipping method update based on given request data
+     *
+     * @param RequestInterface $request
+     *
+     * @return int
+     * @throws InputException
+     */
+    public function updateByRequest(RequestInterface $request): int;
+
+    /**
+     * Executes shipping method update based on given data
+     *
+     * @param DataObject $data
+     *
+     * @return int
+     * @throws InputException
+     */
+    public function updateByData(DataObject $data): int;
+}
