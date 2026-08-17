@@ -12,7 +12,6 @@ namespace Klarna\Kco\Model\Api\Builder;
 use Klarna\Base\Api\BuilderInterface;
 use Klarna\Base\Exception;
 use Klarna\Base\Helper\DataConverter;
-use Klarna\Base\Helper\KlarnaConfig;
 use Klarna\Kco\Helper\KlarnaConfig as KcoKlarnaConfig;
 use Klarna\Base\Model\Api\MagentoToKlarnaLocaleMapper;
 use Klarna\Kco\Model\Checkout\B2b;
@@ -83,10 +82,6 @@ class Kasper implements BuilderInterface
      * @var DirectoryHelper $directoryHelper
      */
     private $directoryHelper;
-    /**
-     * @var KlarnaConfig $klarnaConfig
-     */
-    private $klarnaConfig;
     /**
      * @var Url $url
      */
@@ -164,7 +159,6 @@ class Kasper implements BuilderInterface
      * @param Calculator                                  $calculator
      * @param DirectoryHelper                             $directoryHelper
      * @param DateTime                                    $coreDate
-     * @param KlarnaConfig                                $klarnaConfig
      * @param DataObjectFactory                           $dataObjectFactory
      * @param DataConverter                               $dataConverter
      * @param SettingsProvider                            $config
@@ -193,7 +187,6 @@ class Kasper implements BuilderInterface
         Calculator $calculator,
         DirectoryHelper $directoryHelper,
         DateTime $coreDate,
-        KlarnaConfig $klarnaConfig,
         DataObjectFactory $dataObjectFactory,
         DataConverter $dataConverter,
         SettingsProvider $config,
@@ -221,7 +214,6 @@ class Kasper implements BuilderInterface
         $this->checkoutUrl              = $checkoutUrl;
         $this->parameter                = $parameter;
         $this->directoryHelper          = $directoryHelper;
-        $this->klarnaConfig             = $klarnaConfig;
         $this->url                      = $url;
         $this->dataObjectFactory        = $dataObjectFactory;
         $this->coreDate                 = $coreDate;

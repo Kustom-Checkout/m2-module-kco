@@ -16,7 +16,7 @@
 
 ### Fixes
 
-* None
+* KUSTOM-89: Removed deprecated class `Klarna\Base\Helper\KlarnaConfig` reference
 
 ## 12.2.0 / 2026-08-14
 
