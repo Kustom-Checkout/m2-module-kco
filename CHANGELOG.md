@@ -1,6 +1,6 @@
 # Changelog
 
-## 12.3.0 / 2026-08-14
+## 12.2.0 / 2026-08-19
 
 ### Breaking changes
 
@@ -8,6 +8,7 @@
 
 ### Features / changes
 
+* KUSTOM-96: Support for the full checkout feature
 * KUSTOM-89: Read and store additional shipping details from Kustom order's
   `selected_shipping_option` (Order Management API response) — including carrier, tosId,
   and pickup location name alongside the raw `selected_shipping_option` object as JSON.
@@ -17,20 +18,6 @@
 ### Fixes
 
 * KUSTOM-89: Removed deprecated class `Klarna\Base\Helper\KlarnaConfig` reference
-
-## 12.2.0 / 2026-08-14
-
-### Breaking changes
-
-* None
-
-### Features / changes
-
-* KUSTOM-96: Support for the full checkout feature
-
-### Fixes
-
-* None
 
 ## 12.1.1 / 2026-08-10
 
