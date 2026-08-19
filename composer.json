@@ -11,8 +11,8 @@
     "require": {
         "ext-json": "*",
         "kustom/module-admin-settings": "^1",
-        "kustom/module-base": "^11.1",
-        "kustom/module-kss": "^3.0",
+        "kustom/module-base": "^12.0",
+        "kustom/module-kss": "^3.2",
         "kustom/module-logger": "^3.0",
         "kustom/module-orderlines": "^3.0",
         "magento/framework": "^103",
