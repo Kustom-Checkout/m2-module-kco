@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB (Originally developed by Klarna Bank AB)
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -12,7 +12,6 @@ namespace Klarna\Kco\Model\Api\Builder;
 use Klarna\Base\Api\BuilderInterface;
 use Klarna\Base\Exception;
 use Klarna\Base\Helper\DataConverter;
-use Klarna\Base\Helper\KlarnaConfig;
 use Klarna\Kco\Helper\KlarnaConfig as KcoKlarnaConfig;
 use Klarna\Base\Model\Api\MagentoToKlarnaLocaleMapper;
 use Klarna\Kco\Model\Checkout\B2b;
@@ -83,10 +82,6 @@ class Kasper implements BuilderInterface
      * @var DirectoryHelper $directoryHelper
      */
     private $directoryHelper;
-    /**
-     * @var KlarnaConfig $klarnaConfig
-     */
-    private $klarnaConfig;
     /**
      * @var Url $url
      */
@@ -164,7 +159,6 @@ class Kasper implements BuilderInterface
      * @param Calculator                                  $calculator
      * @param DirectoryHelper                             $directoryHelper
      * @param DateTime                                    $coreDate
-     * @param KlarnaConfig                                $klarnaConfig
      * @param DataObjectFactory                           $dataObjectFactory
      * @param DataConverter                               $dataConverter
      * @param SettingsProvider                            $config
@@ -193,7 +187,6 @@ class Kasper implements BuilderInterface
         Calculator $calculator,
         DirectoryHelper $directoryHelper,
         DateTime $coreDate,
-        KlarnaConfig $klarnaConfig,
         DataObjectFactory $dataObjectFactory,
         DataConverter $dataConverter,
         SettingsProvider $config,
@@ -221,7 +214,6 @@ class Kasper implements BuilderInterface
         $this->checkoutUrl              = $checkoutUrl;
         $this->parameter                = $parameter;
         $this->directoryHelper          = $directoryHelper;
-        $this->klarnaConfig             = $klarnaConfig;
         $this->url                      = $url;
         $this->dataObjectFactory        = $dataObjectFactory;
         $this->coreDate                 = $coreDate;
@@ -576,6 +568,10 @@ class Kasper implements BuilderInterface
         $options['shipping_in_iframe'] = $this->shippingOptionsConfiguration->isShippingInIframe($store);
         if ($this->checkoutConfiguration->isB2bEnabled($store)) {
             $options['allowed_customer_types'] = ['person', 'organization'];
+        }
+
+        if ($this->shippingOptionsConfiguration->isTmsConfigurationOverrideDisabled($store)) {
+            $options['tms_configuration_override'] = ['disabled' => true];
         }
 
         $additionalCheckboxes = $this->dataProvider->getAdditionalCheckboxes($quote);

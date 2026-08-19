@@ -1,5 +1,23 @@
 # Changelog
 
+## 12.3.0 / 2026-08-14
+
+### Breaking changes
+
+* None
+
+### Features / changes
+
+* KUSTOM-89: Read and store additional shipping details from Kustom order's
+  `selected_shipping_option` (Order Management API response) — including carrier, tosId,
+  and pickup location name alongside the raw `selected_shipping_option` object as JSON.
+* KUSTOM-89: Added a per-store admin setting to optionally send `options.tms_configuration_override.disabled`
+  on checkout create/update requests, for merchants migrating from a standalone Ingrid iframe integration.
+
+### Fixes
+
+* KUSTOM-89: Removed deprecated class `Klarna\Base\Helper\KlarnaConfig` reference
+
 ## 12.2.0 / 2026-08-14
 
 ### Breaking changes

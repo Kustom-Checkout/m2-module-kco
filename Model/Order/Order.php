@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB (Originally developed by Klarna Bank AB)
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -447,6 +447,8 @@ class Order
      * @param OrderInterface        $klarnaOrder
      * @param MagentoOrderInterface $order
      * @param ApiInterface          $omApi
+     * @throws CouldNotSaveException
+     * @throws LocalizedException
      */
     private function updateOrderWithKlarnaReference(
         OrderInterface $klarnaOrder,
@@ -469,7 +471,36 @@ class Order
             }
         }
 
+        $this->updateSelectedShippingOptionDetails($klarnaOrder, $klarnaOrderDetails);
+
         $this->logger->debug('Updated the order with the Kustom reference');
+    }
+
+    /**
+     * Storing TMS (e.g. Ingrid) shipping option data (tos_id, carrier, pickup location name and the raw
+     * selected_shipping_option object) from the placed Kustom order onto the klarna_core_order entity.
+     *
+     * @param OrderInterface $klarnaOrder
+     * @param DataObject     $klarnaOrderDetails
+     * @throws CouldNotSaveException
+     * @throws LocalizedException
+     */
+    private function updateSelectedShippingOptionDetails(
+        OrderInterface $klarnaOrder,
+        DataObject $klarnaOrderDetails
+    ): void {
+        $selectedShippingOption = $klarnaOrderDetails->getSelectedShippingOption();
+        if (!$selectedShippingOption || !is_array($selectedShippingOption)) {
+            return;
+        }
+
+        $klarnaOrder->setTosId($selectedShippingOption['tos_id'] ?? null);
+        $klarnaOrder->setShippingCarrier($selectedShippingOption['carrier'] ?? null);
+        $klarnaOrder->setShippingLocationName($selectedShippingOption['location']['name'] ?? null);
+        $klarnaOrder->setSelectedShippingOption(json_encode($selectedShippingOption));
+
+        $this->orderRepository->save($klarnaOrder);
+        $this->logger->debug('Updated the Kustom order with the selected shipping option details');
     }
 
     /**
