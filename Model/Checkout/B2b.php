@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright 2025 Kustom AB (Originally developed by Klarna Bank AB)
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -80,13 +80,36 @@ class B2b
      */
     public function getBusinessIdAttributeValue(string $customerId, StoreInterface $store)
     {
+        $attributeCode = $this->getBusinessIdAttributeCode($store);
+
+        /**
+         * The admin setting is optional. When nothing is selected Magento stores either an empty string or the
+         * string "0" (the value of the "-- Please Select --" option). Neither of them is a real customer attribute
+         * code, so looking it up would raise an exception and break the whole company checkout flow.
+         */
+        if ($attributeCode === '') {
+            return false;
+        }
+
         $customerObj = $this->customerRepository->getById($customerId);
-        $businessIdValue =
-            $customerObj->getCustomAttribute($this->checkoutConfiguration->getBusinessIdAttribute($store));
+        $businessIdValue = $customerObj->getCustomAttribute($attributeCode);
         if ($businessIdValue) {
             return $businessIdValue->getValue();
         }
         return false;
+    }
+
+    /**
+     * Getting back the configured business id attribute code, empty string when nothing is configured
+     *
+     * @param StoreInterface $store
+     * @return string
+     */
+    public function getBusinessIdAttributeCode(StoreInterface $store): string
+    {
+        $attributeCode = trim((string)$this->checkoutConfiguration->getBusinessIdAttribute($store));
+
+        return ($attributeCode === '0') ? '' : $attributeCode;
     }
 
     /**
