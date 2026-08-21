@@ -49,6 +49,23 @@ use Magento\Sales\Model\OrderRepository as MageOrderRepository;
 class Order
 {
     /**
+     * Kustom checkout statuses which allow the shop order to be created
+     */
+    public const PLACEABLE_CHECKOUT_STATUSES = ['checkout_complete', 'created'];
+
+    /**
+     * Order management statuses which prove that the money is already reserved even when the checkout resource still
+     * reports an intermediate status. This happens with external/app based payment methods (for example Vipps or
+     * "Online bank transfer") where the customer returns to the confirmation page before Kustom has flipped the
+     * checkout status.
+     */
+    public const AUTHORIZED_OM_STATUSES = [
+        KcoApiInterface::ORDER_STATUS_AUTHORIZED,
+        KcoApiInterface::ORDER_STATUS_PART_CAPTURED,
+        KcoApiInterface::ORDER_STATUS_CAPTURED
+    ];
+
+    /**
      * @var KcoSession
      */
     private KcoSession $kcoSession;
@@ -300,6 +317,66 @@ class Order
     }
 
     /**
+     * Returns true when the shop order is allowed to be created for the given checkout resource
+     *
+     * External/app based payment methods (Vipps, MobilePay, online bank transfer, ...) redirect the customer away from
+     * the checkout. When the customer comes back to the confirmation controller the checkout resource can still report
+     * an intermediate status even though the purchase is already authorized in order management. Treating that as a
+     * hard failure produces "authorized but no shop order" situations, which merchants then see as cancellations.
+     *
+     * @param DataObject $checkout
+     * @param string $klarnaOrderId
+     * @return bool
+     */
+    private function isCheckoutPlaceable(DataObject $checkout, string $klarnaOrderId): bool
+    {
+        if (in_array((string)$checkout->getStatus(), self::PLACEABLE_CHECKOUT_STATUSES, true)) {
+            return true;
+        }
+
+        return $this->isKlarnaOrderAuthorized($klarnaOrderId);
+    }
+
+    /**
+     * Returns true when order management already reports an authorized (or captured) order
+     *
+     * @param string $klarnaOrderId
+     * @return bool
+     */
+    private function isKlarnaOrderAuthorized(string $klarnaOrderId): bool
+    {
+        try {
+            $store = $this->mageQuote !== null
+                ? $this->mageQuote->getStore()
+                : $this->workflowProvider->getMagentoQuote()->getStore();
+
+            $omApi = $this->factory->createOmApi(
+                Kco::METHOD_CODE,
+                $store->getCurrentCurrencyCode(),
+                $store
+            );
+
+            $status = (string)$this->fetchKlarnaOrderDetails($omApi, $klarnaOrderId)->getStatus();
+        } catch (\Exception $e) {
+            $this->logger->info('Could not read the order management status for order: ' . $klarnaOrderId);
+            $this->logger->log('error', $e);
+
+            return false;
+        }
+
+        if (in_array($status, self::AUTHORIZED_OM_STATUSES, true)) {
+            $this->logger->info(
+                'Checkout status is not final but the Kustom order is ' . $status
+                . '. Continuing with the shop order creation for: ' . $klarnaOrderId
+            );
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Canceling the Klarna order
      *
      * @param string $klarnaOrderId
@@ -309,6 +386,7 @@ class Order
     public function cancelKlarnaOrder(string $klarnaOrderId, string $cancelReason): void
     {
         $this->workflowProvider->setKlarnaOrderId($klarnaOrderId);
+        $magentoOrder = null;
         try {
             $magentoOrder = $this->workflowProvider->getMagentoOrder();
             $store = $magentoOrder->getStore();
@@ -330,6 +408,20 @@ class Order
             if (!$klarnaId) {
                 $klarnaId = $klarnaOrderId;
             }
+
+            /**
+             * Safety net: never cancel on the Kustom side while a live shop order exists for the same purchase.
+             * Doing so creates the "Magento processing / Kustom cancelled" mismatch reported by merchants.
+             */
+            if ($magentoOrder !== null && !$magentoOrder->isCanceled()) {
+                $this->logger->info(
+                    'Skipping the Kustom cancellation because shop order ' . $magentoOrder->getIncrementId()
+                    . ' is still active (state: ' . $magentoOrder->getState() . '). Reason was: ' . $cancelReason
+                );
+
+                return;
+            }
+
             if ($order->getStatus() !== 'CANCELLED') {
                 $orderManagement->cancel($klarnaId);
                 $this->logger->info('Canceled order with Kustom - ' . $cancelReason);
