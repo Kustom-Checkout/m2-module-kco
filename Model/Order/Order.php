@@ -31,6 +31,7 @@ use Magento\Framework\Exception\AlreadyExistsException;
 use Magento\Framework\Exception\CouldNotSaveException;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Exception\NoSuchEntityException;
+use Magento\Framework\Lock\LockManagerInterface;
 use Magento\Framework\Phrase;
 use Magento\Quote\Api\Data\CartInterface;
 use Magento\Sales\Api\Data\OrderInterface as MagentoOrderInterface;
@@ -48,6 +49,16 @@ use Magento\Sales\Model\OrderRepository as MageOrderRepository;
  */
 class Order
 {
+    /**
+     * Prefix of the lock name which is used to serialise the order creation per Kustom order id
+     */
+    private const LOCK_PREFIX = 'kustom_order_create_';
+
+    /**
+     * Maximum amount of seconds we wait for a concurrent request to finish the order creation
+     */
+    private const LOCK_TIMEOUT = 15;
+
     /**
      * @var KcoSession
      */
@@ -116,6 +127,10 @@ class Order
      * @var DataObject[]
      */
     private array $klarnaOrderDetailsCache = [];
+    /**
+     * @var LockManagerInterface
+     */
+    private LockManagerInterface $lockManager;
 
     /**
      * @param KcoSession               $kcoSession
@@ -131,6 +146,7 @@ class Order
      * @param Action                   $action
      * @param Checkout                 $checkoutConfiguration
      * @param SearchCriteriaBuilder    $searchCriteriaBuilder
+     * @param LockManagerInterface     $lockManager
      * @SuppressWarnings(PHPMD.ExcessiveParameterList)
      * @codeCoverageIgnore
      */
@@ -147,7 +163,8 @@ class Order
         Handler $validation,
         Action $action,
         Checkout $checkoutConfiguration,
-        SearchCriteriaBuilder $searchCriteriaBuilder
+        SearchCriteriaBuilder $searchCriteriaBuilder,
+        LockManagerInterface $lockManager
     ) {
         $this->kcoSession            = $kcoSession;
         $this->initializer           = $initializer;
@@ -162,10 +179,19 @@ class Order
         $this->action                = $action;
         $this->checkoutConfiguration = $checkoutConfiguration;
         $this->searchCriteriaBuilder = $searchCriteriaBuilder;
+        $this->lockManager           = $lockManager;
     }
 
     /**
      * Creating the magento order for the given Klarna order
+     *
+     * The whole creation is serialised per Kustom order id. Both the confirmation controller and the
+     * push controller can be executed concurrently for the same checkout, and the duplicate checks
+     * below are simple reads whose data is only written after the order has been placed. Without the
+     * lock two requests can pass those checks and place two Magento orders, because
+     * Magento\Quote\Model\Quote::reserveOrderId() silently reserves a new increment id when the
+     * previously reserved one is already used. Magento\Quote\Model\CartMutex only exists from
+     * Magento 2.4.7 onwards, so we cannot rely on it.
      *
      * @param string $klarnaOrderId
      * @return MagentoOrderInterface
@@ -175,6 +201,34 @@ class Order
      * @throws AlreadyExistsException
      */
     public function createMagentoOrder(string $klarnaOrderId): MagentoOrderInterface
+    {
+        $lockName = self::LOCK_PREFIX . $klarnaOrderId;
+        if (!$this->lockManager->lock($lockName, self::LOCK_TIMEOUT)) {
+            $this->logger->debug(
+                'Could not acquire the order creation lock for the Kustom order id: ' . $klarnaOrderId
+            );
+
+            throw new AlreadyExistsException(__('Order creation is already in progress.'));
+        }
+
+        try {
+            return $this->createMagentoOrderLocked($klarnaOrderId);
+        } finally {
+            $this->lockManager->unlock($lockName);
+        }
+    }
+
+    /**
+     * Creating the magento order. Only to be called while holding the order creation lock.
+     *
+     * @param string $klarnaOrderId
+     * @return MagentoOrderInterface
+     * @throws KlarnaException
+     * @throws CouldNotSaveException
+     * @throws LocalizedException
+     * @throws AlreadyExistsException
+     */
+    private function createMagentoOrderLocked(string $klarnaOrderId): MagentoOrderInterface
     {
         $this->workflowProvider->setKlarnaOrderId($klarnaOrderId);
 
