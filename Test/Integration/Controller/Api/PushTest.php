@@ -514,6 +514,41 @@ class PushTest extends AbstractController
     /**
      * @magentoAppIsolation enabled
      * @magentoDbIsolation enabled
+     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/klarna_order_setup1_single_simple_product.php
+     */
+    public function testExecuteShouldAutoCaptureAndInvoiceWhenKlarnaOrderIsCaptured(): void
+    {
+        $expectedResponse = '[]';
+        $klarnaOrderId = '123456-1234-1234-1234-1234567890';
+
+        $this->orderManagementMock->expects($this->any())
+            ->method('getOrder')
+            ->willReturn([
+                'captured_amount' => 1500,
+                'captures' => [],
+                'klarna_reference' => '12345',
+                'status' => 'CAPTURED',
+                'reservation' => 'test-reservation-id',
+            ]);
+        $this->orderManagementMock->expects($this->any())
+            ->method('updateMerchantReferences')
+            ->willReturn([]);
+        $this->orderManagementMock->expects($this->any())
+            ->method('acknowledgeOrder')
+            ->willReturn(['is_successful' => true]);
+
+        $this->getRequest()->setMethod(Http::METHOD_POST);
+        $this->dispatch('kco/api/push/id/' . $klarnaOrderId);
+        $this->assertEquals($expectedResponse, $this->getResponse()->getBody());
+
+        $magentoOrder = $this->mOrderFactory->create()->loadByIncrementId('100000001');
+        $this->assertSame('processing', $magentoOrder->getState());
+        $this->assertGreaterThan(0, $magentoOrder->getInvoiceCollection()->count());
+    }
+
+    /**
+     * @magentoAppIsolation enabled
+     * @magentoDbIsolation enabled
      * @magentoConfigFixture current_store payment/klarna_kco/active 1
      * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/quote_setup1_single_simple_product.php
      */

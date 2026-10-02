@@ -34,6 +34,7 @@ use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Framework\Phrase;
 use Magento\Quote\Api\Data\CartInterface;
 use Magento\Sales\Api\Data\OrderInterface as MagentoOrderInterface;
+use Magento\Sales\Api\InvoiceOrderInterface;
 use Magento\Sales\Model\Order as SalesOrder;
 use Magento\Sales\Model\Order\Email\Sender\OrderSender;
 use Magento\Sales\Model\OrderRepository as MageOrderRepository;
@@ -113,6 +114,10 @@ class Order
      */
     private SearchCriteriaBuilder $searchCriteriaBuilder;
     /**
+     * @var InvoiceOrderInterface
+     */
+    private InvoiceOrderInterface $invoiceOrder;
+    /**
      * @var DataObject[]
      */
     private array $klarnaOrderDetailsCache = [];
@@ -131,6 +136,7 @@ class Order
      * @param Action                   $action
      * @param Checkout                 $checkoutConfiguration
      * @param SearchCriteriaBuilder    $searchCriteriaBuilder
+     * @param InvoiceOrderInterface    $invoiceOrder
      * @SuppressWarnings(PHPMD.ExcessiveParameterList)
      * @codeCoverageIgnore
      */
@@ -147,7 +153,8 @@ class Order
         Handler $validation,
         Action $action,
         Checkout $checkoutConfiguration,
-        SearchCriteriaBuilder $searchCriteriaBuilder
+        SearchCriteriaBuilder $searchCriteriaBuilder,
+        InvoiceOrderInterface $invoiceOrder,
     ) {
         $this->kcoSession            = $kcoSession;
         $this->initializer           = $initializer;
@@ -162,6 +169,7 @@ class Order
         $this->action                = $action;
         $this->checkoutConfiguration = $checkoutConfiguration;
         $this->searchCriteriaBuilder = $searchCriteriaBuilder;
+        $this->invoiceOrder          = $invoiceOrder;
     }
 
     /**
@@ -384,6 +392,10 @@ class Order
         $this->acknowledgeOrder($this->mageOrder, $klarnaOrder, $klarnaOrderId, $omApi);
         $this->cancelOrder($this->mageOrder, $klarnaOrderId);
 
+        if ($klarnaStatus === KcoApiInterface::ORDER_STATUS_CAPTURED) {
+            $this->autoInvoiceOrder($this->mageOrder, $klarnaOrder);
+        }
+
         $this->mageOrderRepository->save($this->mageOrder);
     }
 
@@ -439,6 +451,37 @@ class Order
         $this->logger->info(
             'Magento order ' . $order->getIncrementId() . ' cancelled due to Kustom status: ' . $klarnaStatus
         );
+    }
+
+    /**
+     * Automatically invoice order when Kustom reports the order as already captured (=auto capture enabled).
+     *
+     * @param MagentoOrderInterface $order
+     * @param OrderInterface        $klarnaOrder
+     */
+    private function autoInvoiceOrder(MagentoOrderInterface $order, OrderInterface $klarnaOrder): void
+    {
+        if (!$order->canInvoice()) {
+            $this->logger->debug(
+                'Payment is auto-captured by Kustom but cannot be invoiced in Magento.',
+                [
+                    'increment_id' => $order->getIncrementId(),
+                    'entity_id' => $order->getEntityId(),
+                    'state' => $order->getState(),
+                ]
+            );
+
+            return;
+        }
+
+        $payment = $order->getPayment();
+        $payment->setTransactionId($klarnaOrder->getReservationId() . '-capture');
+        $payment->setParentTransactionId($klarnaOrder->getReservationId());
+
+        $this->invoiceOrder->execute((int)$order->getEntityId());
+
+        $order->addCommentToStatusHistory(__('Kustom automatically captured payment and invoice was created.'));
+        $this->mageOrderRepository->save($order);
     }
 
     /**

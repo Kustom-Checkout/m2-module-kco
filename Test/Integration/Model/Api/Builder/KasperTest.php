@@ -48,6 +48,7 @@ class KasperTest extends TestCase
      * @magentoConfigFixture current_store checkout/klarna_kco/title_mandatory 1
      * @magentoConfigFixture current_store checkout/klarna_kco/shipping_in_iframe 1
      * @magentoConfigFixture current_store checkout/klarna_kco/use_full_checkout 1
+     * @magentoConfigFixture current_store payment/klarna_kco/payment_action authorize_capture
      */
     public function testGetOptionsWithAllConfigsTurnedOn(): void
     {
@@ -60,6 +61,7 @@ class KasperTest extends TestCase
             'title_mandatory' => true,
             'shipping_in_iframe' => true,
             'full_checkout' => true,
+            'auto_capture' => true, // Config payment_action = authorize_capture activates auto_capture option
         ];
 
         /** @var Quote $quote */
@@ -78,6 +80,7 @@ class KasperTest extends TestCase
      * @magentoConfigFixture current_store checkout/klarna_kco/title_mandatory 0
      * @magentoConfigFixture current_store checkout/klarna_kco/shipping_in_iframe 0
      * @magentoConfigFixture current_store checkout/klarna_kco/use_full_checkout 0
+     * @magentoConfigFixture current_store payment/klarna_kco/payment_action capture
      */
     public function testGetOptionsWithAllConfigsTurnedOff(): void
     {
