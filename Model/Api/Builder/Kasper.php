@@ -581,6 +581,10 @@ class Kasper implements BuilderInterface
 
         $options['full_checkout'] = $this->checkoutConfiguration->isUseFullCheckout($store);
 
+        if ($this->checkoutConfiguration->isAutoCaptureEnabled($store)) {
+            $options['auto_capture'] = true;
+        }
+
         return $options;
     }
 
