@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright 2025 Kustom AB (Originally developed by Klarna Bank AB)
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -10,9 +10,9 @@ declare(strict_types=1);
 namespace Klarna\Kco\Plugin\ShippingMethodGateway\Calculation;
 
 use Klarna\Kco\Model\Tax;
+use Magento\Tax\Api\Data\QuoteDetailsItemInterface;
 use Magento\Tax\Api\Data\TaxDetailsItemInterface;
 use Magento\Tax\Model\Calculation\UnitBaseCalculator;
-use Magento\Tax\Model\Sales\Quote\ItemDetails;
 
 /**
  * Recalculating/setting the shipping values when the calculation is based
@@ -41,8 +41,8 @@ class UnitBaseCalculatorPlugin
      *
      * @param UnitBaseCalculator $subject
      * @param TaxDetailsItemInterface $result
-     * @param ItemDetails $quoteDetails
-     * @param int $quantity
+     * @param QuoteDetailsItemInterface $item
+     * @param float|int|string $quantity
      * @param bool $round
      * @return TaxDetailsItemInterface
      * @throws \Magento\Framework\Exception\LocalizedException
@@ -52,8 +52,8 @@ class UnitBaseCalculatorPlugin
     public function afterCalculate(
         UnitBaseCalculator $subject,
         TaxDetailsItemInterface $result,
-        ItemDetails $quoteDetails,
-        int $quantity,
+        QuoteDetailsItemInterface $item,
+        $quantity,
         $round = true
     ): TaxDetailsItemInterface {
         return $this->tax->updateMagentoTax($result);
