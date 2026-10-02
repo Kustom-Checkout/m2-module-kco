@@ -1,5 +1,21 @@
 # Changelog
 
+## 12.2.1 / 2026-10-02
+
+### Breaking changes
+
+* None
+
+### Features / changes
+
+* None
+
+### Fixes
+
+* KUSTOM-121: Fixed infinite loop in tax calculation on quote load (B2B Negotiable Quote)
+* KUSTOM-121: Skipped KSS tax update when Kustom Checkout is disabled for the store
+* KUSTOM-121: Aligned tax calculator plugin signatures with Magento core
+
 ## 12.2.0 / 2026-08-19
 
 ### Breaking changes
