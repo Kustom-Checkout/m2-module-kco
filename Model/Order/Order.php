@@ -479,9 +479,7 @@ class Order
         $payment->setParentTransactionId($klarnaOrder->getReservationId());
 
         $this->invoiceOrder->execute((int)$order->getEntityId());
-
         $order->addCommentToStatusHistory(__('Kustom automatically captured payment and invoice was created.'));
-        $this->mageOrderRepository->save($order);
     }
 
     /**
