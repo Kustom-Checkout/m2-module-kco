@@ -1,5 +1,11 @@
 # Changelog
 
+## 12.3.0 / 2026-10-05
+
+### Features / changes
+
+* KUSTOM-43: Support for automatic payment capture.
+
 ## 12.2.0 / 2026-08-19
 
 ### Breaking changes
