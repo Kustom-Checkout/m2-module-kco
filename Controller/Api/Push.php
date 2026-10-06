@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright 2025 Kustom AB (Originally developed by Klarna Bank AB)
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -19,7 +19,9 @@ use Klarna\Base\Exception as KlarnaException;
 use Klarna\Logger\Model\Api\Logger;
 use Klarna\Logger\Model\Api\Container;
 use Klarna\Base\Model\Responder\Result;
+use Klarna\Kco\Model\Order\CreationLock;
 use Klarna\Kco\Model\Order\Order as CheckoutOrder;
+use Magento\Framework\App\ObjectManager;
 use Magento\Framework\App\Action\HttpPostActionInterface;
 use Magento\Framework\App\RequestInterface;
 use Magento\Framework\Controller\Result\Json;
@@ -73,6 +75,11 @@ class Push extends CsrfAbstract implements HttpPostActionInterface
     private RequestInterface $request;
 
     /**
+     * @var CreationLock
+     */
+    private CreationLock $creationLock;
+
+    /**
      * @param LoggerInterface $logger
      * @param CheckoutOrder $checkoutOrder
      * @param DataObjectFactory $dataObjectFactory
@@ -81,6 +88,7 @@ class Push extends CsrfAbstract implements HttpPostActionInterface
      * @param Container $container
      * @param WorkflowProvider $workflowProvider
      * @param RequestInterface $request
+     * @param CreationLock|null $creationLock
      */
     public function __construct(
         LoggerInterface $logger,
@@ -90,7 +98,8 @@ class Push extends CsrfAbstract implements HttpPostActionInterface
         Logger $apiLogger,
         Container $container,
         WorkflowProvider $workflowProvider,
-        RequestInterface $request
+        RequestInterface $request,
+        ?CreationLock $creationLock = null
     ) {
         $this->logger = $logger;
         $this->checkoutOrder = $checkoutOrder;
@@ -99,6 +108,7 @@ class Push extends CsrfAbstract implements HttpPostActionInterface
         $this->container = $container;
         $this->workflowProvider = $workflowProvider;
         $this->request = $request;
+        $this->creationLock = $creationLock ?: ObjectManager::getInstance()->get(CreationLock::class);
     }
 
     /**
@@ -112,9 +122,9 @@ class Push extends CsrfAbstract implements HttpPostActionInterface
         $this->workflowProvider->setKlarnaOrderId($klarnaOrderId);
         $this->logger->debug('Push: klarna order id: ' . $klarnaOrderId);
 
-        $createOrderStatus = $this->canCreateOrder() ? $this->createOrder($klarnaOrderId) : true;
-        if ($createOrderStatus instanceof Json) {
-            return $createOrderStatus;
+        $errorResponse = $this->canCreateOrder() ? $this->createOrder($klarnaOrderId) : null;
+        if ($errorResponse !== null) {
+            return $errorResponse;
         }
 
         return $this->updateOrderState($klarnaOrderId);
@@ -139,19 +149,37 @@ class Push extends CsrfAbstract implements HttpPostActionInterface
     }
 
     /**
+     * Creating the order. Returns an error response when the push has to stop, null when it can continue.
+     *
      * @param string $klarnaOrderId
      *
-     * @return Json|true
+     * @return Json|null
      */
-    private function createOrder(string $klarnaOrderId)
+    private function createOrder(string $klarnaOrderId): ?Json
     {
         $this->logger->debug('Push: Attempting to create order by id ' . $klarnaOrderId);
 
+        if (!$this->creationLock->acquire($klarnaOrderId)) {
+            $this->logger->debug('Push: Order creation in progress by concurrent request: ' . $klarnaOrderId);
+
+            return $this->result->getJsonResult(
+                503,
+                ['error' => 'Order creation is in progress. Please try again later.']
+            );
+        }
+
         try {
+            if ($this->checkoutOrder->isMagentoOrderExists($klarnaOrderId)) {
+                $this->logger->debug('Push: Order already created by concurrent request: ' . $klarnaOrderId);
+
+                return null;
+            }
+
             $this->checkoutOrder->createMagentoOrder($klarnaOrderId);
-            $this->checkoutOrder->sendCustomerMail();
         } catch (AlreadyExistsException $exception) {
             $this->logger->debug('Push: Order already exists for this Klarna order id: ' . $klarnaOrderId);
+
+            return null;
         } catch (CartLockedException $exception) {
             $this->logger->debug('Push: Retry order ' . $klarnaOrderId . ' - Exception: ' . $exception->getMessage());
 
@@ -163,7 +191,7 @@ class Push extends CsrfAbstract implements HttpPostActionInterface
             if ($this->checkoutOrder->isMagentoOrderExists($klarnaOrderId)) {
                 $this->logger->debug('Push: Order already created by concurrent request: ' . $klarnaOrderId);
 
-                return true;
+                return null;
             }
 
             $this->logger->debug('Push: Order creation failed: ' . $e->getMessage());
@@ -179,11 +207,14 @@ class Push extends CsrfAbstract implements HttpPostActionInterface
                 500,
                 ['error' => 'Failed to create order']
             );
+        } finally {
+            $this->creationLock->release($klarnaOrderId);
         }
 
+        $this->checkoutOrder->sendCustomerMail();
         $this->logger->debug('Push: Order created successfully by id ' . $klarnaOrderId);
 
-        return true;
+        return null;
     }
 
     /**
