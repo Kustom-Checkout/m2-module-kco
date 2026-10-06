@@ -12,16 +12,11 @@
 
 ### Fixes
 
-* KUSTOM-113: Fix duplicate orders when the confirmation and push controllers create the order
-  concurrently. The order creation is now serialised per Kustom order id with a lock which is
-  handled in the controllers via the new `Klarna\Kco\Model\Order\CreationLock` class. A request
-  which waited for the lock skips the order creation when the order was already created. The
-  customer mail is sent after the lock was released.
-* KUSTOM-113: When the order was created by a concurrent request, the confirmation controller now
-  fills the customer's checkout session with that order. Before, the success page validation
-  failed and the customer saw an error page although the order was placed.
-* KUSTOM-113: The push controller's internal order creation step now returns either an error
-  response or null instead of a mix of `true` and json responses. No public API change.
+* KUSTOM-113: Prevent duplicate orders from concurrent confirmation and push calls with a lock per Kustom order id.
+* KUSTOM-113: The order creation lock always uses the database locker, so it works on multi-node setups.
+* KUSTOM-113: Fill the checkout session when the order was created by a concurrent call.
+* KUSTOM-113: The customer mail is sent after the lock is released, and mail errors no longer stop the push.
+* KUSTOM-113: Order creation and lock tests are integration tests now instead of unit tests.
 
 ## 12.2.0 / 2026-08-19
 

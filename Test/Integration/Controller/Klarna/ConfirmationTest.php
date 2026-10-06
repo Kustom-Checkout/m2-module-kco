@@ -16,6 +16,7 @@ use Klarna\Base\Exception;
 use Klarna\Base\Model\OrderFactory as KlarnaOrderFactory;
 use Klarna\Kco\Model\Api\Rest\Service\Checkout;
 use Magento\Checkout\Model\Session as CheckoutSession;
+use Klarna\Kco\Model\Order\CreationLock;
 use Magento\Framework\App\Request\Http;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Lock\LockManagerInterface;
@@ -370,6 +371,33 @@ class ConfirmationTest extends AbstractController
     /**
      * @magentoAppIsolation enabled
      * @magentoDbIsolation enabled
+     * @magentoConfigFixture current_store payment/klarna_kco/active 1
+     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/quote_setup1_single_simple_product.php
+     */
+    public function testExecuteShouldRedirectToSuccessPageWithoutCreatingOrderWhenConcurrentRequestIsCreatingIt(): void
+    {
+        $expectedRedirect = 'checkout/klarna/success';
+        $klarnaOrderId = '123456-1234-1234-1234-1234567890';
+
+        $this->simulateConcurrentRequestHoldingTheCreationLock();
+        $this->checkoutMock->expects($this->never())->method('getOrder');
+
+        $this->getRequest()->setMethod(Http::METHOD_GET);
+        $this->dispatch('checkout/klarna/confirmation/id/' . $klarnaOrderId);
+        $this->assertRedirect($this->stringContains($expectedRedirect));
+        $this->assertSessionMessages($this->equalTo([]));
+
+        $this->assertOrderData(
+            $klarnaOrderId,
+            [],
+            [],
+            []
+        );
+    }
+
+    /**
+     * @magentoAppIsolation enabled
+     * @magentoDbIsolation enabled
      */
     public function testExecuteShouldThrowAnErrorWhenIdMatchesNothing(): void
     {
@@ -444,6 +472,20 @@ class ConfirmationTest extends AbstractController
             [],
             [],
             []
+        );
+    }
+
+    /**
+     * Simulating a concurrent request which holds the order creation lock for the whole lock timeout
+     */
+    private function simulateConcurrentRequestHoldingTheCreationLock(): void
+    {
+        $lockManagerMock = $this->createMock(LockManagerInterface::class);
+        $lockManagerMock->method('lock')->willReturn(false);
+        $lockManagerMock->expects($this->never())->method('unlock');
+        $this->_objectManager->addSharedInstance(
+            $this->_objectManager->create(CreationLock::class, ['lockManager' => $lockManagerMock]),
+            CreationLock::class
         );
     }
 
