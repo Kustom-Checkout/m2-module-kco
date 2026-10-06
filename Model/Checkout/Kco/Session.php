@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright 2025 Kustom AB (Originally developed by Klarna Bank AB)
+ * Copyright © Klarna Bank AB (publ)
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -44,14 +44,6 @@ class Session
      * @var CartInterface
      */
     private $quote;
-
-    /**
-     * Re-entrancy guard: loading the quote can trigger a nested totals collection
-     * (e.g. Magento_NegotiableQuote plugins on getQuoteId()/quote load) which calls getQuote() again.
-     *
-     * @var bool
-     */
-    private $isLoadingQuote = false;
 
     /**
      * @var CheckoutSession
@@ -171,8 +163,7 @@ class Session
      */
     public function getQuote(): ?CartInterface
     {
-        if ($this->quote === null && !$this->isLoadingQuote) {
-            $this->isLoadingQuote = true;
+        if ($this->quote === null) {
             try {
                 $magentoQuoteId = $this->checkoutSession->getQuoteId();
                 if (!$magentoQuoteId) {
@@ -184,8 +175,6 @@ class Session
                 $this->quote = $magentoQuote;
             } catch (\LogicException $e) {
                 return null;
-            } finally {
-                $this->isLoadingQuote = false;
             }
         }
 
@@ -266,11 +255,6 @@ class Session
     {
         if ($this->validator->getKssUsedFlag() !== $this->validator::CHECK_NOT_SET) {
             return $this->validator->getKssUsedFlag() > 0;
-        }
-
-        if ($this->isLoadingQuote) {
-            // Nested call while the quote is still loading: answer without caching the result
-            return false;
         }
 
         $quote = $this->getQuote();

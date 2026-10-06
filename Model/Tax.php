@@ -9,16 +9,17 @@ declare(strict_types=1);
 
 namespace Klarna\Kco\Model;
 
-use Klarna\Kco\Model\Checkout\Configuration\SettingsProvider;
 use Klarna\Kco\Model\Checkout\Kco\Session;
 use Klarna\Kss\Model\Assignment\Tax as KssTaxAssignment;
-use Magento\Store\Model\StoreManagerInterface;
 use Magento\Tax\Api\Data\TaxDetailsItemInterface;
 
 /**
  * Performing checks and updates on the Magento Tax values
  *
  * @api
+ * @deprecated 12.2.1 Relies on the checkout session from within totals collection, which can reload the quote
+ *             and recurse. Use \Klarna\Kco\Model\ShippingMethodGateway\ShippingTax instead.
+ * @see \Klarna\Kco\Model\ShippingMethodGateway\ShippingTax
  */
 class Tax
 {
@@ -30,39 +31,16 @@ class Tax
      * @var Session
      */
     private $session;
-    /**
-     * @var SettingsProvider
-     */
-    private $config;
-    /**
-     * @var StoreManagerInterface
-     */
-    private $storeManager;
-    /**
-     * Re-entrancy guard: loading the quote can trigger a nested totals collection
-     * (e.g. Magento_NegotiableQuote plugins), which would call this method again.
-     *
-     * @var bool
-     */
-    private $isProcessing = false;
 
     /**
-     * @param KssTaxAssignment      $assignment
-     * @param Session               $session
-     * @param SettingsProvider      $config
-     * @param StoreManagerInterface $storeManager
+     * @param KssTaxAssignment $assignment
+     * @param Session          $session
      * @codeCoverageIgnore
      */
-    public function __construct(
-        KssTaxAssignment $assignment,
-        Session $session,
-        SettingsProvider $config,
-        StoreManagerInterface $storeManager
-    ) {
-        $this->assignment   = $assignment;
-        $this->session      = $session;
-        $this->config       = $config;
-        $this->storeManager = $storeManager;
+    public function __construct(KssTaxAssignment $assignment, Session $session)
+    {
+        $this->assignment = $assignment;
+        $this->session    = $session;
     }
 
     /**
@@ -77,28 +55,18 @@ class Tax
      */
     public function updateMagentoTax(TaxDetailsItemInterface $taxDetailsItem): TaxDetailsItemInterface
     {
-        if ($this->isProcessing || !$this->config->isKcoEnabled($this->storeManager->getStore())) {
+        if (!$this->session->hasActiveKlarnaShippingGatewayInformation()) {
             return $taxDetailsItem;
         }
 
-        $this->isProcessing = true;
-        try {
-            if (!$this->session->hasActiveKlarnaShippingGatewayInformation()) {
-                return $taxDetailsItem;
-            }
-
-            $quote = $this->session->getQuote();
-            if ($quote !== null && $this->assignment->canUpdateValues($taxDetailsItem, $quote)) {
-                return $this->assignment->assignToTaxInstance(
-                    $taxDetailsItem,
-                    $this->session->getKlarnaShippingGateway(),
-                    $quote
-                );
-            }
-
-            return $taxDetailsItem;
-        } finally {
-            $this->isProcessing = false;
+        if ($this->assignment->canUpdateValues($taxDetailsItem, $this->session->getQuote())) {
+            return $this->assignment->assignToTaxInstance(
+                $taxDetailsItem,
+                $this->session->getKlarnaShippingGateway(),
+                $this->session->getQuote()
+            );
         }
+
+        return $taxDetailsItem;
     }
 }

@@ -9,7 +9,7 @@ declare(strict_types=1);
 
 namespace Klarna\Kco\Plugin\ShippingMethodGateway\Calculation;
 
-use Klarna\Kco\Model\Tax;
+use Klarna\Kco\Model\ShippingMethodGateway\ShippingTax;
 use Magento\Tax\Api\Data\QuoteDetailsItemInterface;
 use Magento\Tax\Api\Data\TaxDetailsItemInterface;
 use Magento\Tax\Model\Calculation\TotalBaseCalculator;
@@ -23,17 +23,17 @@ use Magento\Tax\Model\Calculation\TotalBaseCalculator;
 class TotalBaseCalculatorPlugin
 {
     /**
-     * @var Tax
+     * @var ShippingTax
      */
-    private $tax;
+    private $shippingTax;
 
     /**
-     * @param Tax $tax
+     * @param ShippingTax $shippingTax
      * @codeCoverageIgnore
      */
-    public function __construct(Tax $tax)
+    public function __construct(ShippingTax $shippingTax)
     {
-        $this->tax = $tax;
+        $this->shippingTax = $shippingTax;
     }
 
     /**
@@ -45,7 +45,6 @@ class TotalBaseCalculatorPlugin
      * @param float|int|string $quantity
      * @param bool $round
      * @return TaxDetailsItemInterface
-     * @throws \Magento\Framework\Exception\LocalizedException
      * @SuppressWarnings(PHPMD.UnusedFormalParameter)
      * @codeCoverageIgnore
      */
@@ -56,6 +55,6 @@ class TotalBaseCalculatorPlugin
         $quantity,
         $round = true
     ): TaxDetailsItemInterface {
-        return $this->tax->updateMagentoTax($result);
+        return $this->shippingTax->apply($result, $item);
     }
 }
