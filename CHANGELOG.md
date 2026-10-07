@@ -8,7 +8,7 @@
 
 ### Features / changes
 
-* None
+* KUSTOM-113: Push returns 503 when a concurrent call is still creating the order, so Kustom retries (backport of 12.3.0).
 
 ### Fixes
 
