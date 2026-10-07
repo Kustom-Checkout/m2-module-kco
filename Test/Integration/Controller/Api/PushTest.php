@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright 2025 Kustom AB (Originally developed by Klarna Bank AB)
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -14,6 +14,7 @@ namespace Klarna\Kco\Test\Integration\Controller\Api;
 use Klarna\Backend\Model\Api\Rest\Service\Ordermanagement;
 use Klarna\Base\Model\OrderFactory as KlarnaOrderFactory;
 use Klarna\Kco\Model\Api\Rest\Service\Checkout;
+use Klarna\Kco\Model\Order\CreationLock;
 use Magento\Framework\App\Request\Http;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Lock\LockManagerInterface;
@@ -396,6 +397,34 @@ class PushTest extends AbstractController
     /**
      * @magentoAppIsolation enabled
      * @magentoDbIsolation enabled
+     * @magentoConfigFixture current_store payment/klarna_kco/active 1
+     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/quote_setup1_single_simple_product.php
+     */
+    public function testExecuteShouldReturnRetryResponseWhenConcurrentRequestIsCreatingTheOrder(): void
+    {
+        $expectedResponse = '{"error":"Order creation is in progress. Please try again later."}';
+        $klarnaOrderId = '123456-1234-1234-1234-1234567890';
+
+        $this->simulateConcurrentRequestHoldingTheCreationLock();
+        $this->checkoutMock->expects($this->never())->method('getOrder');
+        $this->orderManagementMock->expects($this->never())->method('acknowledgeOrder');
+
+        $this->getRequest()->setMethod(Http::METHOD_POST);
+        $this->dispatch('kco/api/push/id/' . $klarnaOrderId);
+        $this->assertEquals(503, $this->getResponse()->getHttpResponseCode());
+        $this->assertEquals($expectedResponse, $this->getResponse()->getBody());
+
+        $this->assertOrderData(
+            $klarnaOrderId,
+            [],
+            [],
+            []
+        );
+    }
+
+    /**
+     * @magentoAppIsolation enabled
+     * @magentoDbIsolation enabled
      */
     public function testExecuteShouldThrowAnErrorWhenIdMatchesNothing(): void
     {
@@ -519,6 +548,20 @@ class PushTest extends AbstractController
             [],
             [],
             []
+        );
+    }
+
+    /**
+     * Simulating a concurrent request which holds the order creation lock for the whole lock timeout
+     */
+    private function simulateConcurrentRequestHoldingTheCreationLock(): void
+    {
+        $lockManagerMock = $this->createMock(LockManagerInterface::class);
+        $lockManagerMock->method('lock')->willReturn(false);
+        $lockManagerMock->expects($this->never())->method('unlock');
+        $this->_objectManager->addSharedInstance(
+            $this->_objectManager->create(CreationLock::class, ['lockManager' => $lockManagerMock]),
+            CreationLock::class
         );
     }
 

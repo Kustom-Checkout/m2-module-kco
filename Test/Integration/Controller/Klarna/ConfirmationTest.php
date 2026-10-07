@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright 2025 Kustom AB (Originally developed by Klarna Bank AB)
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -15,6 +15,8 @@ use Klarna\Backend\Model\Api\Rest\Service\Ordermanagement;
 use Klarna\Base\Exception;
 use Klarna\Base\Model\OrderFactory as KlarnaOrderFactory;
 use Klarna\Kco\Model\Api\Rest\Service\Checkout;
+use Magento\Checkout\Model\Session as CheckoutSession;
+use Klarna\Kco\Model\Order\CreationLock;
 use Magento\Framework\App\Request\Http;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Lock\LockManagerInterface;
@@ -355,6 +357,42 @@ class ConfirmationTest extends AbstractController
                 ],
             ]
         );
+
+        // The order was created by a concurrent request, so the customer's checkout session has to be filled
+        // with it, otherwise the success page validation fails
+        $magentoOrder = $this->mOrderFactory->create()->loadByIncrementId('100000001');
+        $checkoutSession = $this->_objectManager->get(CheckoutSession::class);
+        static::assertEquals($magentoOrder->getId(), $checkoutSession->getLastOrderId());
+        static::assertEquals('100000001', $checkoutSession->getLastRealOrderId());
+        static::assertEquals($magentoOrder->getQuoteId(), $checkoutSession->getLastQuoteId());
+        static::assertEquals($magentoOrder->getQuoteId(), $checkoutSession->getLastSuccessQuoteId());
+    }
+
+    /**
+     * @magentoAppIsolation enabled
+     * @magentoDbIsolation enabled
+     * @magentoConfigFixture current_store payment/klarna_kco/active 1
+     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/quote_setup1_single_simple_product.php
+     */
+    public function testExecuteShouldRedirectToSuccessPageWithoutCreatingOrderWhenConcurrentRequestIsCreatingIt(): void
+    {
+        $expectedRedirect = 'checkout/klarna/success';
+        $klarnaOrderId = '123456-1234-1234-1234-1234567890';
+
+        $this->simulateConcurrentRequestHoldingTheCreationLock();
+        $this->checkoutMock->expects($this->never())->method('getOrder');
+
+        $this->getRequest()->setMethod(Http::METHOD_GET);
+        $this->dispatch('checkout/klarna/confirmation/id/' . $klarnaOrderId);
+        $this->assertRedirect($this->stringContains($expectedRedirect));
+        $this->assertSessionMessages($this->equalTo([]));
+
+        $this->assertOrderData(
+            $klarnaOrderId,
+            [],
+            [],
+            []
+        );
     }
 
     /**
@@ -434,6 +472,20 @@ class ConfirmationTest extends AbstractController
             [],
             [],
             []
+        );
+    }
+
+    /**
+     * Simulating a concurrent request which holds the order creation lock for the whole lock timeout
+     */
+    private function simulateConcurrentRequestHoldingTheCreationLock(): void
+    {
+        $lockManagerMock = $this->createMock(LockManagerInterface::class);
+        $lockManagerMock->method('lock')->willReturn(false);
+        $lockManagerMock->expects($this->never())->method('unlock');
+        $this->_objectManager->addSharedInstance(
+            $this->_objectManager->create(CreationLock::class, ['lockManager' => $lockManagerMock]),
+            CreationLock::class
         );
     }
 

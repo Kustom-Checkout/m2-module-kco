@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright 2025 Kustom AB (Originally developed by Klarna Bank AB)
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -275,7 +275,7 @@ class Order
                 $this->orderSender->send($this->mageOrder);
                 $this->logger->debug('Confirmation: Sent order email');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // We don't want to cancel the order at this point, only just log the error
             $this->logger->info('Could not sent the customer mail');
             $this->logger->critical($e);
