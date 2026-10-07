@@ -1,5 +1,23 @@
 # Changelog
 
+## 12.3.0 / 2026-10-06
+
+### Breaking changes
+
+* None
+
+### Features / changes
+
+* KUSTOM-113: Order creation is locked per Kustom order id in the confirmation and push controllers.
+* KUSTOM-113: The lock always uses the database locker, so it also works on multi-node setups.
+* KUSTOM-113: Push returns 503 when a concurrent call is still creating the order, so Kustom retries.
+
+### Fixes
+
+* KUSTOM-113: Fix duplicate Magento orders from concurrent confirmation and push calls.
+* KUSTOM-113: Fix the success page error when the order was created by a concurrent call.
+* KUSTOM-113: Fix mail errors stopping the push before the order state is updated.
+
 ## 12.2.0 / 2026-08-19
 
 ### Breaking changes
