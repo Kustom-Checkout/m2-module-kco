@@ -1,6 +1,17 @@
 # Changelog
 
-## 12.3.0 / 2026-10-09
+## 12.4.2 / 2026-10-08
+
+### Breaking changes
+* None
+
+### Features / changes
+* None
+
+### Fixes
+* KUSTOM-122: PHPUnit tests corrected
+
+## 12.4.1 / 2026-10-09
 
 ### Breaking changes
 
