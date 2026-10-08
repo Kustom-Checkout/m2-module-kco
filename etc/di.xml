@@ -134,4 +134,11 @@
             </argument>
         </arguments>
     </type>
+    <!-- The order creation lock must be shared by all web nodes, so it always uses the database locker
+         instead of the configured lock provider (a file based lock is local to one node) -->
+    <type name="Klarna\Kco\Model\Order\CreationLock">
+        <arguments>
+            <argument name="lockManager" xsi:type="object">Magento\Framework\Lock\Backend\Database</argument>
+        </arguments>
+    </type>
 </config>

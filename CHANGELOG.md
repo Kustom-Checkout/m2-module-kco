@@ -1,6 +1,6 @@
 # Changelog
 
-## 12.3.0 / 2026-10-02
+## 12.4.0 / 2026-10-02
 
 ### Breaking changes
 
@@ -8,13 +8,31 @@
 
 ### Features / changes
 
-* KUSTOM-121: Deprecated `Klarna\Kco\Model\Tax` in favour of `ShippingMethodGateway\ShippingTax`
+* KUSTOM-121: Deprecated `Klarna\Kco\Model\Tax` in favor of `ShippingMethodGateway\ShippingTax`
 
 ### Fixes
 
 * KUSTOM-121: Fixed infinite loop in tax calculation by removing checkout session usage
 * KUSTOM-121: Skipped KSS tax update when Kustom Checkout is disabled for the store
 * KUSTOM-121: Aligned tax calculator plugin signatures with Magento core
+
+## 12.3.0 / 2026-10-06
+
+### Breaking changes
+
+* None
+
+### Features / changes
+
+* KUSTOM-122: Order creation is locked per Kustom order id in the confirmation and push controllers.
+* KUSTOM-122: The lock always uses the database locker, so it also works on multi-node setups.
+* KUSTOM-122: Push returns 503 when a concurrent call is still creating the order, so Kustom retries.
+
+### Fixes
+
+* KUSTOM-122: Fix duplicate Magento orders from concurrent confirmation and push calls.
+* KUSTOM-122: Fix the success page error when the order was created by a concurrent call.
+* KUSTOM-122: Fix mail errors stopping the push before the order state is updated.
 
 ## 12.2.0 / 2026-08-19
 
@@ -34,6 +52,24 @@
 ### Fixes
 
 * KUSTOM-89: Removed deprecated class `Klarna\Base\Helper\KlarnaConfig` reference
+
+## 12.1.2 / 2026-10-06
+
+### Breaking changes
+
+* None
+
+### Features / changes
+
+* KUSTOM-113: Order creation is locked per Kustom order id in the confirmation and push controllers (backport of 12.3.0).
+* KUSTOM-113: The lock always uses the database locker, so it also works on multi-node setups (backport of 12.3.0).
+* KUSTOM-113: Push returns 503 when a concurrent call is still creating the order, so Kustom retries (backport of 12.3.0).
+
+### Fixes
+
+* KUSTOM-113: Fix duplicate Magento orders from concurrent confirmation and push calls (backport of 12.3.0).
+* KUSTOM-113: Fix the success page error when the order was created by a concurrent call (backport of 12.3.0).
+* KUSTOM-113: Fix mail errors stopping the push before the order state is updated (backport of 12.3.0).
 
 ## 12.1.1 / 2026-08-10
 

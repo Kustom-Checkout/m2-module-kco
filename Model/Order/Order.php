@@ -275,7 +275,7 @@ class Order
                 $this->orderSender->send($this->mageOrder);
                 $this->logger->debug('Confirmation: Sent order email');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // We don't want to cancel the order at this point, only just log the error
             $this->logger->info('Could not sent the customer mail');
             $this->logger->critical($e);
