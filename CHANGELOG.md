@@ -8,6 +8,7 @@
 
 ### Features / changes
 
+* KUSTOM-43: Support for automatic payment capture.
 * KUSTOM-121: Deprecated `Klarna\Kco\Model\Tax` in favor of `ShippingMethodGateway\ShippingTax`
 * KUSTOM-122: Order creation is locked per Kustom order id in the confirmation and push controllers.
 * KUSTOM-122: The lock always uses the database locker, so it also works on multi-node setups.
