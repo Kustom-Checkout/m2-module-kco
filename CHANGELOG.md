@@ -1,5 +1,21 @@
 # Changelog
 
+## 12.4.0 / 2026-10-02
+
+### Breaking changes
+
+* None
+
+### Features / changes
+
+* KUSTOM-121: Deprecated `Klarna\Kco\Model\Tax` in favor of `ShippingMethodGateway\ShippingTax`
+
+### Fixes
+
+* KUSTOM-121: Fixed infinite loop in tax calculation by removing checkout session usage
+* KUSTOM-121: Skipped KSS tax update when Kustom Checkout is disabled for the store
+* KUSTOM-121: Aligned tax calculator plugin signatures with Magento core
+
 ## 12.3.0 / 2026-10-06
 
 ### Breaking changes

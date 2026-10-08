@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright 2025 Kustom AB (Originally developed by Klarna Bank AB)
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -17,6 +17,9 @@ use Magento\Tax\Api\Data\TaxDetailsItemInterface;
  * Performing checks and updates on the Magento Tax values
  *
  * @api
+ * @deprecated 12.2.1 Relies on the checkout session from within totals collection, which can reload the quote
+ *             and recurse. Use \Klarna\Kco\Model\ShippingMethodGateway\ShippingTax instead.
+ * @see \Klarna\Kco\Model\ShippingMethodGateway\ShippingTax
  */
 class Tax
 {

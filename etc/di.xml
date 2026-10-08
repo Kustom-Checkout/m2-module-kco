@@ -116,6 +116,9 @@
     <type name="Magento\Tax\Model\Calculation\RowBaseCalculator">
         <plugin sortOrder="1" name="klarnaKcoShippingGatewayUpdateRowBase" type="Klarna\Kco\Plugin\ShippingMethodGateway\Calculation\RowBaseCalculatorPlugin"/>
     </type>
+    <type name="Magento\Tax\Model\Sales\Total\Quote\CommonTaxCollector">
+        <plugin sortOrder="1" name="klarnaKcoShippingGatewayShippingDataObject" type="Klarna\Kco\Plugin\ShippingMethodGateway\Calculation\ShippingDataObjectPlugin"/>
+    </type>
     <type name="Magento\Shipping\Model\CarrierFactory">
         <plugin sortOrder="1" name="klarnaKcoShippingGatewayCarrierFactory" type="Klarna\Kco\Plugin\ShippingMethodGateway\CarrierFactoryPlugin"/>
     </type>
