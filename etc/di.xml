@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <!--
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright 2025 Kustom AB (Originally developed by Klarna Bank AB)
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -116,6 +116,9 @@
     <type name="Magento\Tax\Model\Calculation\RowBaseCalculator">
         <plugin sortOrder="1" name="klarnaKcoShippingGatewayUpdateRowBase" type="Klarna\Kco\Plugin\ShippingMethodGateway\Calculation\RowBaseCalculatorPlugin"/>
     </type>
+    <type name="Magento\Tax\Model\Sales\Total\Quote\CommonTaxCollector">
+        <plugin sortOrder="1" name="klarnaKcoShippingGatewayShippingDataObject" type="Klarna\Kco\Plugin\ShippingMethodGateway\Calculation\ShippingDataObjectPlugin"/>
+    </type>
     <type name="Magento\Shipping\Model\CarrierFactory">
         <plugin sortOrder="1" name="klarnaKcoShippingGatewayCarrierFactory" type="Klarna\Kco\Plugin\ShippingMethodGateway\CarrierFactoryPlugin"/>
     </type>
@@ -129,6 +132,13 @@
             <argument name="updaterComponents" xsi:type="array">
                 <item name="default_updater" xsi:type="object">Klarna\Kco\Model\Cart\ShippingMethodUpdate\UpdaterComponent\DefaultUpdater</item>
             </argument>
+        </arguments>
+    </type>
+    <!-- The order creation lock must be shared by all web nodes, so it always uses the database locker
+         instead of the configured lock provider (a file based lock is local to one node) -->
+    <type name="Klarna\Kco\Model\Order\CreationLock">
+        <arguments>
+            <argument name="lockManager" xsi:type="object">Magento\Framework\Lock\Backend\Database</argument>
         </arguments>
     </type>
 </config>

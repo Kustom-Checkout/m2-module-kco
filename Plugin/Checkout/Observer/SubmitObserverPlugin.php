@@ -54,8 +54,7 @@ class SubmitObserverPlugin
         /** @var  \Magento\Quote\Model\Quote $quote */
         $quote = $observer->getEvent()->getQuote();
 
-        if ($this->config->isKcoEnabled($quote->getStore())
-            && $this->config->isKlarnaCheckoutPaymentEnabled($quote->getStore())) {
+        if ($this->config->isKcoEnabled($quote->getStore())) {
             return true;
         }
         return $proceed($observer);
