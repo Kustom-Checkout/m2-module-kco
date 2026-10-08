@@ -13,6 +13,7 @@ namespace Klarna\Kco\Test\Unit\Plugin\ShippingMethodGateway\Calculation;
 use Klarna\Kco\Model\ShippingMethodGateway\GatewayResolver;
 use Klarna\Kco\Plugin\ShippingMethodGateway\Calculation\ShippingDataObjectPlugin;
 use Klarna\Kss\Api\ShippingMethodGatewayInterface;
+use Magento\Quote\Api\Data\CartInterface;
 use Magento\Quote\Api\Data\ShippingAssignmentInterface;
 use Magento\Quote\Api\Data\ShippingInterface;
 use Magento\Quote\Model\Quote;
@@ -111,18 +112,75 @@ class ShippingDataObjectPluginTest extends TestCase
     {
         $item      = $this->createMock(QuoteDetailsItemInterface::class);
         $gateway   = $this->createMock(ShippingMethodGatewayInterface::class);
-        $extension = $this->createMock(QuoteDetailsItemExtensionInterface::class);
+        $extension = $this->createExtensionAttributes();
         $this->gatewayResolver->method('getActiveGateway')->with($this->quote)->willReturn($gateway);
         $item->method('getExtensionAttributes')->willReturn(null);
         $this->extensionFactory->method('create')->willReturn($extension);
 
-        $extension->expects(static::once())->method('setKssShippingGateway')->with($gateway);
-        $extension->expects(static::once())->method('setKssQuote')->with($this->quote);
         $item->expects(static::once())->method('setExtensionAttributes')->with($extension);
 
         static::assertSame(
             $item,
             $this->plugin->afterGetShippingDataObject($this->subject, $item, $this->shippingAssignment, $this->total, true)
         );
+        static::assertSame($gateway, $extension->getKssShippingGateway());
+        static::assertSame($this->quote, $extension->getKssQuote());
+    }
+
+    /**
+     * Extension attributes stub. Unit tests run without setup:di:compile, so the generated interface can be
+     * empty there and its methods cannot be mocked; this stub works with both the empty and generated interface.
+     *
+     * @return QuoteDetailsItemExtensionInterface
+     */
+    private function createExtensionAttributes(): QuoteDetailsItemExtensionInterface
+    {
+        return new class implements QuoteDetailsItemExtensionInterface {
+            /**
+             * @var mixed
+             */
+            private $priceForTaxCalculation;
+            /**
+             * @var ShippingMethodGatewayInterface|null
+             */
+            private $kssShippingGateway;
+            /**
+             * @var CartInterface|null
+             */
+            private $kssQuote;
+
+            public function getPriceForTaxCalculation()
+            {
+                return $this->priceForTaxCalculation;
+            }
+
+            public function setPriceForTaxCalculation($priceForTaxCalculation)
+            {
+                $this->priceForTaxCalculation = $priceForTaxCalculation;
+                return $this;
+            }
+
+            public function getKssShippingGateway()
+            {
+                return $this->kssShippingGateway;
+            }
+
+            public function setKssShippingGateway(ShippingMethodGatewayInterface $kssShippingGateway)
+            {
+                $this->kssShippingGateway = $kssShippingGateway;
+                return $this;
+            }
+
+            public function getKssQuote()
+            {
+                return $this->kssQuote;
+            }
+
+            public function setKssQuote(CartInterface $kssQuote)
+            {
+                $this->kssQuote = $kssQuote;
+                return $this;
+            }
+        };
     }
 }

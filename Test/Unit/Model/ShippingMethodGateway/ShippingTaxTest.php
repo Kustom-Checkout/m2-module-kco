@@ -52,10 +52,71 @@ class ShippingTaxTest extends TestCase
 
     private function givenExtensionAttributes(?ShippingMethodGatewayInterface $gateway, ?CartInterface $quote): void
     {
-        $extension = $this->createMock(QuoteDetailsItemExtensionInterface::class);
-        $extension->method('getKssShippingGateway')->willReturn($gateway);
-        $extension->method('getKssQuote')->willReturn($quote);
+        $extension = $this->createExtensionAttributes();
+        if ($gateway !== null) {
+            $extension->setKssShippingGateway($gateway);
+        }
+        if ($quote !== null) {
+            $extension->setKssQuote($quote);
+        }
         $this->item->method('getExtensionAttributes')->willReturn($extension);
+    }
+
+    /**
+     * Extension attributes stub. Unit tests run without setup:di:compile, so the generated interface can be
+     * empty there and its methods cannot be mocked; this stub works with both the empty and generated interface.
+     *
+     * @return QuoteDetailsItemExtensionInterface
+     */
+    private function createExtensionAttributes(): QuoteDetailsItemExtensionInterface
+    {
+        return new class implements QuoteDetailsItemExtensionInterface {
+            /**
+             * @var mixed
+             */
+            private $priceForTaxCalculation;
+            /**
+             * @var ShippingMethodGatewayInterface|null
+             */
+            private $kssShippingGateway;
+            /**
+             * @var CartInterface|null
+             */
+            private $kssQuote;
+
+            public function getPriceForTaxCalculation()
+            {
+                return $this->priceForTaxCalculation;
+            }
+
+            public function setPriceForTaxCalculation($priceForTaxCalculation)
+            {
+                $this->priceForTaxCalculation = $priceForTaxCalculation;
+                return $this;
+            }
+
+            public function getKssShippingGateway()
+            {
+                return $this->kssShippingGateway;
+            }
+
+            public function setKssShippingGateway(ShippingMethodGatewayInterface $kssShippingGateway)
+            {
+                $this->kssShippingGateway = $kssShippingGateway;
+                return $this;
+            }
+
+            public function getKssQuote()
+            {
+                return $this->kssQuote;
+            }
+
+            public function setKssQuote(CartInterface $kssQuote)
+            {
+                $this->kssQuote = $kssQuote;
+                return $this;
+            }
+        };
     }
 
     /**
