@@ -1,6 +1,6 @@
 # Changelog
 
-## 12.4.0 / 2026-10-02
+## 12.3.0 / 2026-10-09
 
 ### Breaking changes
 
@@ -9,27 +9,15 @@
 ### Features / changes
 
 * KUSTOM-121: Deprecated `Klarna\Kco\Model\Tax` in favor of `ShippingMethodGateway\ShippingTax`
-
-### Fixes
-
-* KUSTOM-121: Fixed infinite loop in tax calculation by removing checkout session usage
-* KUSTOM-121: Skipped KSS tax update when Kustom Checkout is disabled for the store
-* KUSTOM-121: Aligned tax calculator plugin signatures with Magento core
-
-## 12.3.0 / 2026-10-06
-
-### Breaking changes
-
-* None
-
-### Features / changes
-
 * KUSTOM-122: Order creation is locked per Kustom order id in the confirmation and push controllers.
 * KUSTOM-122: The lock always uses the database locker, so it also works on multi-node setups.
 * KUSTOM-122: Push returns 503 when a concurrent call is still creating the order, so Kustom retries.
 
 ### Fixes
 
+* KUSTOM-121: Fixed infinite loop in tax calculation by removing checkout session usage
+* KUSTOM-121: Skipped KSS tax update when Kustom Checkout is disabled for the store
+* KUSTOM-121: Aligned tax calculator plugin signatures with Magento core
 * KUSTOM-122: Fix duplicate Magento orders from concurrent confirmation and push calls.
 * KUSTOM-122: Fix the success page error when the order was created by a concurrent call.
 * KUSTOM-122: Fix mail errors stopping the push before the order state is updated.
