@@ -1,5 +1,16 @@
 # Changelog
 
+## 12.4.3 / 2026-10-12
+
+### Breaking changes
+* None
+
+### Features / changes
+* None
+
+### Fixes
+* KUSTOM-118: Removed Klarna Plugin Api reference from load klarna checkout observer
+
 ## 12.4.2 / 2026-10-08
 
 ### Breaking changes
