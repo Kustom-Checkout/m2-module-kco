@@ -6,10 +6,10 @@
 * None
 
 ### Features / changes
-* None
+* KUSTOM-118: Added compatibility with module-admin-settings 2.x
 
 ### Fixes
-* KUSTOM-118: Removed Klarna Plugin Api reference from load klarna checkout observer
+* KUSTOM-118: Removed undeclared dependency for module-plugins-api from checkout observer
 
 ## 12.4.2 / 2026-10-08
 
