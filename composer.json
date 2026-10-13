@@ -3,14 +3,14 @@
     "description": "Kustom Checkout Magento 2 Extension",
     "type": "magento2-module",
     "license": "Apache-2.0",
-    "version": "12.4.3",
+    "version": "12.4.4",
     "scripts": {
         "test": "phpunit",
         "cov": "phpunit --coverage-html coverage"
     },
     "require": {
         "ext-json": "*",
-        "kustom/module-admin-settings": "^1",
+        "kustom/module-admin-settings": "^1 || ^2",
         "kustom/module-base": "^12.0",
         "kustom/module-kss": "^3.2",
         "kustom/module-logger": "^3.0",
