@@ -1,5 +1,16 @@
 # Changelog
 
+## 12.4.3 / 2026-10-12
+
+### Breaking changes
+* None
+
+### Features / changes
+* KUSTOM-118: Added compatibility with module-admin-settings 2.x
+
+### Fixes
+* KUSTOM-118: Removed undeclared dependency for module-plugins-api from checkout observer
+
 ## 12.4.2 / 2026-10-08
 
 ### Breaking changes
@@ -14,11 +25,9 @@
 ## 12.4.1 / 2026-10-09
 
 ### Breaking changes
-
 * None
 
 ### Features / changes
-
 * KUSTOM-43: Support for automatic payment capture.
 * KUSTOM-121: Deprecated `Klarna\Kco\Model\Tax` in favor of `ShippingMethodGateway\ShippingTax`
 * KUSTOM-122: Order creation is locked per Kustom order id in the confirmation and push controllers.
@@ -26,7 +35,6 @@
 * KUSTOM-122: Push returns 503 when a concurrent call is still creating the order, so Kustom retries.
 
 ### Fixes
-
 * KUSTOM-121: Fixed infinite loop in tax calculation by removing checkout session usage
 * KUSTOM-121: Skipped KSS tax update when Kustom Checkout is disabled for the store
 * KUSTOM-121: Aligned tax calculator plugin signatures with Magento core

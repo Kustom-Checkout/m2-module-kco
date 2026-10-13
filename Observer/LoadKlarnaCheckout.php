@@ -16,7 +16,6 @@ use Klarna\Base\Exception;
 use Klarna\Kco\Model\Checkout\Configuration\SettingsProvider;
 use Klarna\Kco\Model\Checkout\FullCheckout;
 use Klarna\Logger\Api\LoggerInterface;
-use Klarna\PluginsApi\Model\Update\Validator;
 use Magento\Checkout\Model\Session;
 use Magento\Framework\App\ObjectManager;
 use Magento\Framework\Event\Manager;
@@ -65,11 +64,6 @@ class LoadKlarnaCheckout implements ObserverInterface
     private DataObjectFactory $dataObjectFactory;
 
     /**
-     * @var Validator
-     */
-    private Validator $pluginsApiValidator;
-
-    /**
      * @var Checkout
      */
     private Checkout $checkoutConfig;
@@ -95,7 +89,6 @@ class LoadKlarnaCheckout implements ObserverInterface
      * @param Session $session
      * @param SettingsProvider $config
      * @param DataObjectFactory $dataObjectFactory
-     * @param Validator $pluginsApiValidator
      * @param Checkout|null $checkoutConfig
      * @param FullCheckout|null $fullCheckout
      * @param ManagerInterface|null $messageManager
@@ -107,7 +100,6 @@ class LoadKlarnaCheckout implements ObserverInterface
         Session $session,
         SettingsProvider $config,
         DataObjectFactory $dataObjectFactory,
-        Validator $pluginsApiValidator,
         ?Checkout $checkoutConfig = null,
         ?FullCheckout $fullCheckout = null,
         ?ManagerInterface $messageManager = null,
@@ -118,7 +110,6 @@ class LoadKlarnaCheckout implements ObserverInterface
         $this->manager = $manager;
         $this->checkoutSession = $session;
         $this->dataObjectFactory = $dataObjectFactory;
-        $this->pluginsApiValidator = $pluginsApiValidator;
 
         // TODO: Remove OM usage in next major release, done for backwards compatibility
         $this->checkoutConfig = $checkoutConfig ?: ObjectManager::getInstance()->get(Checkout::class);
@@ -134,10 +125,6 @@ class LoadKlarnaCheckout implements ObserverInterface
     {
         try {
             $store = $this->checkoutSession->getQuote()->getStore();
-            if ($this->pluginsApiValidator->isPspMerchantByStore($store)) {
-                return;
-            }
-
             $redirectUrl = $this->getRedirectUrl($observer, $store);
             if (!$redirectUrl) {
                 return;
