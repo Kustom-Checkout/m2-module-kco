@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB (Originally developed by Klarna Bank AB)
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -13,6 +13,7 @@ use Klarna\Base\Exception as KlarnaException;
 use Klarna\Orderlines\Model\ItemGenerator;
 use Klarna\Kco\Api\CheckoutValidationInterface;
 use Klarna\Kco\Model\Carrier\Klarna;
+use Klarna\Kss\Model\KssConfigProvider;
 use Klarna\Kss\Model\ShippingMethodGatewayRepository;
 use Magento\Framework\DataObject;
 use Magento\Quote\Api\Data\CartInterface;
@@ -30,14 +31,22 @@ class ShippingMethod implements CheckoutValidationInterface
      * @var ShippingMethodGatewayRepository
      */
     private ShippingMethodGatewayRepository $shippingMethodGatewayRepository;
+    /**
+     * @var KssConfigProvider
+     */
+    private KssConfigProvider $kssConfigProvider;
 
     /**
      * @param ShippingMethodGatewayRepository $shippingMethodGatewayRepository
+     * @param KssConfigProvider               $kssConfigProvider
      * @codeCoverageIgnore
      */
-    public function __construct(ShippingMethodGatewayRepository $shippingMethodGatewayRepository)
-    {
+    public function __construct(
+        ShippingMethodGatewayRepository $shippingMethodGatewayRepository,
+        KssConfigProvider $kssConfigProvider
+    ) {
         $this->shippingMethodGatewayRepository = $shippingMethodGatewayRepository;
+        $this->kssConfigProvider               = $kssConfigProvider;
     }
 
     /**
@@ -51,7 +60,7 @@ class ShippingMethod implements CheckoutValidationInterface
         /** @var Address $address */
         $address              = $quote->getShippingAddress();
         $quoteShippingMethod  = $address->getShippingMethod();
-        $klarnaShippingMethod = $this->getSelectedKlarnaShippingMethod($request);
+        $klarnaShippingMethod = $this->getSelectedKlarnaShippingMethod($request, $quote);
         if ($quoteShippingMethod !== $klarnaShippingMethod) {
             $exceptionMessage = __(
                 'Shipping method does not match for order #%1. Kustom method is %2 vs Magento method is %3',
@@ -66,12 +75,20 @@ class ShippingMethod implements CheckoutValidationInterface
     /**
      * Getting back the shipping method which is set for KCO. When KSS is used then we will return the KSS gateway key.
      *
-     * @param DataObject $request
+     * A KSS gateway entry is only relevant while KSS is enabled for the store. An entry left active from a
+     * checkout session that started before KSS was disabled must not override the method sent by Kustom.
+     *
+     * @param DataObject    $request
+     * @param CartInterface $quote
      * @return string
      */
-    private function getSelectedKlarnaShippingMethod(DataObject $request): string
+    private function getSelectedKlarnaShippingMethod(DataObject $request, CartInterface $quote): string
     {
         $requestMethod = $this->getMethodFromRequest($request);
+
+        if (!$this->kssConfigProvider->isKssEnabled($quote->getStore())) {
+            return $requestMethod;
+        }
 
         try {
             $entry = $this->shippingMethodGatewayRepository->loadShipping($request->getOrderId(), 'klarna_session_id');
