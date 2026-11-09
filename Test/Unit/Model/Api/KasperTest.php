@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB (Originally developed by Klarna Bank AB)
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -8,6 +8,7 @@
 
 namespace Klarna\Kco\Test\Unit\Model\Api;
 
+use Klarna\AdminSettings\Model\Configurations\Kco\ShippingOptions;
 use Klarna\Kco\Model\Api\Kasper;
 use Klarna\Kco\Model\Api\Rest\Service\Checkout;
 use Klarna\Kco\Model\Checkout\Kco\Session;
@@ -141,7 +142,8 @@ class KasperTest extends TestCase
                 $this->checkoutMock,
                 $this->dataObjectFactory,
                 $this->kasperBuilder,
-                []
+                [],
+                $this->createStub(ShippingOptions::class)
             ])
             ->onlyMethods([
                 'getGeneratedCreateRequest',

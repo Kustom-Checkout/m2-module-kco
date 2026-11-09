@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB (Originally developed by Klarna Bank AB)
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -9,12 +9,14 @@ declare(strict_types=1);
 
 namespace Klarna\Kco\Model\Api;
 
+use Klarna\AdminSettings\Model\Configurations\Kco\ShippingOptions;
 use Klarna\Base\Exception as KlarnaException;
 use Klarna\Base\Model\Api\Rest\Service;
 use Klarna\Kco\Api\ApiInterface;
 use Klarna\Kco\Model\Api\Builder\Kasper as KasperBuilder;
 use Klarna\Kco\Model\Api\Rest\Service\Checkout;
 use Klarna\Kco\Model\Checkout\Kco\Session as KcoSession;
+use Magento\Framework\App\ObjectManager;
 use Magento\Framework\DataObject;
 use Magento\Framework\DataObjectFactory;
 use Klarna\Base\Model\Api\Exception as KlarnaApiException;
@@ -49,6 +51,10 @@ class Kasper extends DataObject implements ApiInterface
      * @var KasperBuilder
      */
     private KasperBuilder $kasperBuilder;
+    /**
+     * @var ShippingOptions
+     */
+    private ShippingOptions $shippingOptions;
 
     /**
      * @param KcoSession $kcoSession
@@ -56,6 +62,7 @@ class Kasper extends DataObject implements ApiInterface
      * @param DataObjectFactory $dataObjectFactory
      * @param KasperBuilder $kasperBuilder
      * @param array $data
+     * @param ShippingOptions|null $shippingOptions
      * @codeCoverageIgnore
      */
     public function __construct(
@@ -63,13 +70,16 @@ class Kasper extends DataObject implements ApiInterface
         Checkout $checkout,
         DataObjectFactory $dataObjectFactory,
         KasperBuilder $kasperBuilder,
-        array $data = []
+        array $data = [],
+        ?ShippingOptions $shippingOptions = null
     ) {
         parent::__construct($data);
         $this->kcoSession = $kcoSession;
         $this->checkout = $checkout;
         $this->dataObjectFactory = $dataObjectFactory;
         $this->kasperBuilder = $kasperBuilder;
+        $this->shippingOptions = $shippingOptions
+            ?? ObjectManager::getInstance()->get(ShippingOptions::class);
     }
 
     /**
@@ -135,6 +145,13 @@ class Kasper extends DataObject implements ApiInterface
     {
         $api  = $this->getCheckoutApi();
         $data = $this->getGeneratedUpdateRequest();
+
+        // Kustom keeps properties that are omitted on an update. A shipping_options / selected_shipping_option
+        // left over from an earlier in-iframe (KSS) session would make Kustom add its own shipping_fee line
+        // at purchase on top of ours, so an empty list is sent to clear both when shipping is not in the iframe.
+        if (!$this->shippingOptions->isShippingInIframe($this->getQuote()->getStore())) {
+            $data['shipping_options'] ??= [];
+        }
 
         $klarnaOrder = $api->updateOrder($checkoutId, $data, $this->getQuote()->getBaseCurrencyCode());
 
