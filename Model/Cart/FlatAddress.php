@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace Klarna\Kco\Model\Cart;
 
+use Magento\Directory\Model\Region;
 use Magento\Quote\Api\Data\AddressInterface;
 
 /**
@@ -32,7 +33,7 @@ class FlatAddress
             'lastname'   => $billingAddress->getLastname(),
             'street'     => $billingAddress->getStreet(),
             'city'       => $billingAddress->getCity(),
-            'region'     => $billingAddress->getRegionModel($billingAddress->getRegionId()),
+            'region'     => $this->getRegion($billingAddress),
             'regionId'   => $billingAddress->getRegionId(),
             'regionCode' => $billingAddress->getRegionCode(),
             'postcode'   => $billingAddress->getPostcode(),
@@ -57,7 +58,7 @@ class FlatAddress
             'lastname'   => $shippingAddress->getLastname(),
             'street'     => $shippingAddress->getStreet(),
             'city'       => $shippingAddress->getCity(),
-            'region'     => $shippingAddress->getRegionModel($shippingAddress->getRegionId()),
+            'region'     => $this->getRegion($shippingAddress),
             'regionId'   => $shippingAddress->getRegionId(),
             'regionCode' => $shippingAddress->getRegionCode(),
             'postcode'   => $shippingAddress->getPostcode(),
@@ -78,5 +79,23 @@ class FlatAddress
             'postcode'  => $shippingAddress->getPostcode(),
             'countryId' => $shippingAddress->getCountryId()
         ];
+    }
+
+    /**
+     * Getting back the region model, or null when the address has no region id
+     *
+     * Magento 2.4.7+ throws a TypeError when the region id is null.
+     *
+     * @param AddressInterface $address
+     * @return Region|null
+     */
+    private function getRegion(AddressInterface $address): ?Region
+    {
+        $regionId = $address->getRegionId();
+        if (!$regionId) {
+            return null;
+        }
+
+        return $address->getRegionModel((int)$regionId);
     }
 }

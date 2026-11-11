@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Klarna\Kco\Model\Checkout\Kco;
 
 use Klarna\Kco\Api\ApiInterface;
+use Klarna\Kco\Api\RecurringResolverInterface;
 use Klarna\Kco\Model\Api\Factory;
 use Klarna\Kco\Model\Checkout\Kco\Session as KcoSession;
 use Klarna\Kco\Api\QuoteRepositoryInterface as KlarnaQuoteRepositoryInterface;
@@ -21,6 +22,8 @@ use Magento\Framework\Exception\CouldNotSaveException;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Exception\NoSuchEntityException;
 use Klarna\Kss\Model\Factory as KssFactory;
+use Klarna\Logger\Api\LoggerInterface;
+use Magento\Framework\App\ObjectManager;
 
 /**
  * Class Initializer provides initialize methods
@@ -65,6 +68,14 @@ class Initializer
      * @var KssFactory
      */
     private KssFactory $kssFactory;
+    /**
+     * @var RecurringResolverInterface
+     */
+    private RecurringResolverInterface $recurringResolver;
+    /**
+     * @var LoggerInterface
+     */
+    private LoggerInterface $logger;
 
     /**
      * Initializer constructor.
@@ -74,6 +85,8 @@ class Initializer
      * @param KlarnaQuoteRepositoryInterface  $klarnaQuoteRepository
      * @param KssUpdate                       $kssUpdate
      * @param KssFactory                      $kssFactory
+     * @param RecurringResolverInterface|null $recurringResolver
+     * @param LoggerInterface|null            $logger
      * @codeCoverageIgnore
      */
     public function __construct(
@@ -81,13 +94,21 @@ class Initializer
         Factory $factory,
         KlarnaQuoteRepositoryInterface $klarnaQuoteRepository,
         KssUpdate $kssUpdate,
-        KssFactory $kssFactory
+        KssFactory $kssFactory,
+        ?RecurringResolverInterface $recurringResolver = null,
+        ?LoggerInterface $logger = null
     ) {
         $this->kcoSession               = $session;
         $this->factory                  = $factory;
         $this->klarnaQuoteRepository    = $klarnaQuoteRepository;
         $this->kssUpdate                = $kssUpdate;
         $this->kssFactory               = $kssFactory;
+
+        // TODO: Remove OM usage in next major release, done for backwards compatibility
+        $this->recurringResolver = $recurringResolver ?: ObjectManager::getInstance()->get(
+            RecurringResolverInterface::class
+        );
+        $this->logger = $logger ?: ObjectManager::getInstance()->get(LoggerInterface::class);
     }
 
     /**
@@ -135,11 +156,29 @@ class Initializer
      */
     public function updateKlarnaCheckout($klarnaCheckoutId = null)
     {
+        $isRecurring = $this->recurringResolver->isRecurring($this->kcoSession->getQuote());
+        $klarnaQuote = $this->kcoSession->getKlarnaQuote();
+        $storedCheckoutId = (string)$klarnaQuote->getKlarnaCheckoutId();
+        if ($storedCheckoutId !== '' && (bool)$klarnaQuote->getData('is_recurring') !== $isRecurring) {
+            // The offered payment methods differ between recurring and non-recurring orders: recreate.
+            $checkout = $this->createKlarnaCheckout();
+            $this->logger->info(sprintf(
+                'Kustom order recreated because the recurring state changed. Quote id: %s, '
+                . 'old Kustom order id: %s, new Kustom order id: %s, recurring: %s',
+                (string)$this->kcoSession->getQuote()->getId(),
+                $storedCheckoutId,
+                (string)$this->kcoSession->getKlarnaQuote()->getKlarnaCheckoutId(),
+                $isRecurring ? 'true' : 'false'
+            ));
+            return $checkout;
+        }
+
         $this->klarnaCheckout = $this->getApiInstance($this->kcoSession->getQuote()->getStore())
             ->updateOrder($klarnaCheckoutId);
 
         $this->updateKssValues();
         $this->setKlarnaOrderid();
+        $this->setRecurringState($isRecurring);
         $this->saveKlarnaQuote();
         return $this->klarnaCheckout;
     }
@@ -177,6 +216,7 @@ class Initializer
 
         $this->updateKssValues();
         $this->setKlarnaOrderid();
+        $this->setRecurringState($this->recurringResolver->isRecurring($this->kcoSession->getQuote()));
         $this->saveKlarnaQuote();
         return $this->klarnaCheckout;
     }
@@ -247,6 +287,17 @@ class Initializer
             $klarnaOrderId = $this->klarnaCheckout->getId();
         }
         $this->kcoSession->setKlarnaQuoteKlarnaCheckoutId($klarnaOrderId);
+    }
+
+    /**
+     * Store the resolver result the Kustom order was created or last confirmed with
+     *
+     * @param bool $isRecurring
+     * @throws \Magento\Framework\Exception\LocalizedException
+     */
+    private function setRecurringState(bool $isRecurring): void
+    {
+        $this->kcoSession->getKlarnaQuote()->setData('is_recurring', (int)$isRecurring);
     }
 
     /**

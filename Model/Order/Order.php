@@ -23,7 +23,9 @@ use Klarna\Kco\Model\Checkout\Kco\Session as KcoSession;
 use Klarna\Kco\Model\Order\Shop\Action;
 use Klarna\Kco\Model\Payment\Kco;
 use Klarna\Kco\Model\PaymentStatus as KcoPaymentStatus;
+use Klarna\Kco\Model\Recurring\TokenPersister;
 use Magento\Framework\Api\SearchCriteriaBuilder;
+use Magento\Framework\App\ObjectManager;
 use Klarna\Kco\Model\WorkflowProvider;
 use Klarna\Logger\Api\LoggerInterface;
 use Magento\Framework\DataObject;
@@ -121,6 +123,10 @@ class Order
      * @var DataObject[]
      */
     private array $klarnaOrderDetailsCache = [];
+    /**
+     * @var TokenPersister
+     */
+    private TokenPersister $tokenPersister;
 
     /**
      * @param KcoSession               $kcoSession
@@ -137,6 +143,7 @@ class Order
      * @param Checkout                 $checkoutConfiguration
      * @param SearchCriteriaBuilder    $searchCriteriaBuilder
      * @param InvoiceOrderInterface    $invoiceOrder
+     * @param TokenPersister|null      $tokenPersister
      * @SuppressWarnings(PHPMD.ExcessiveParameterList)
      * @codeCoverageIgnore
      */
@@ -155,6 +162,7 @@ class Order
         Checkout $checkoutConfiguration,
         SearchCriteriaBuilder $searchCriteriaBuilder,
         InvoiceOrderInterface $invoiceOrder,
+        ?TokenPersister $tokenPersister = null
     ) {
         $this->kcoSession            = $kcoSession;
         $this->initializer           = $initializer;
@@ -170,6 +178,9 @@ class Order
         $this->checkoutConfiguration = $checkoutConfiguration;
         $this->searchCriteriaBuilder = $searchCriteriaBuilder;
         $this->invoiceOrder          = $invoiceOrder;
+
+        // TODO: Remove OM usage in next major release, done for backwards compatibility
+        $this->tokenPersister = $tokenPersister ?: ObjectManager::getInstance()->get(TokenPersister::class);
     }
 
     /**
@@ -263,7 +274,35 @@ class Order
         $this->orderRepository->save($this->klarnaOrder);
         $this->logger->debug('Saved the Kustom order');
 
+        $this->persistRecurringToken($klarnaApiOrder);
+
         return $this->mageOrder;
+    }
+
+    /**
+     * Stores the recurring token of the Kustom order. A failure here must never block the order creation.
+     *
+     * @param DataObject $klarnaApiOrder
+     * @return void
+     */
+    private function persistRecurringToken(DataObject $klarnaApiOrder): void
+    {
+        try {
+            $this->tokenPersister->persist(
+                $klarnaApiOrder,
+                $this->mageOrder,
+                $this->klarnaOrder->getUsedMid(),
+                $this->mageQuote
+            );
+        } catch (\Throwable $e) {
+            // Neither the token nor the exception message (could contain column values) is logged.
+            $this->logger->error(sprintf(
+                'Recurring token could not be stored for Kustom order %s, increment %s: %s',
+                $klarnaApiOrder->getData('order_id') ?? '',
+                $this->mageOrder->getIncrementId() ?? '',
+                get_class($e)
+            ));
+        }
     }
 
     /**

@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -9,12 +9,15 @@ declare(strict_types=1);
 
 namespace Klarna\Kco\Model\Api;
 
+use Klarna\AdminSettings\Model\Configurations\Api as ApiConfiguration;
 use Klarna\Base\Exception as KlarnaException;
 use Klarna\Base\Model\Api\Rest\Service;
 use Klarna\Kco\Api\ApiInterface;
 use Klarna\Kco\Model\Api\Builder\Kasper as KasperBuilder;
 use Klarna\Kco\Model\Api\Rest\Service\Checkout;
 use Klarna\Kco\Model\Checkout\Kco\Session as KcoSession;
+use Klarna\Logger\Api\LoggerInterface;
+use Magento\Framework\App\ObjectManager;
 use Magento\Framework\DataObject;
 use Magento\Framework\DataObjectFactory;
 use Klarna\Base\Model\Api\Exception as KlarnaApiException;
@@ -29,6 +32,8 @@ use Klarna\Base\Model\Api\Exception as KlarnaApiException;
  */
 class Kasper extends DataObject implements ApiInterface
 {
+    private const HTTP_BAD_REQUEST = 400;
+
     /**
      * @var ?DataObject
      */
@@ -49,6 +54,14 @@ class Kasper extends DataObject implements ApiInterface
      * @var KasperBuilder
      */
     private KasperBuilder $kasperBuilder;
+    /**
+     * @var LoggerInterface
+     */
+    private LoggerInterface $logger;
+    /**
+     * @var ApiConfiguration
+     */
+    private ApiConfiguration $apiConfiguration;
 
     /**
      * @param KcoSession $kcoSession
@@ -56,6 +69,8 @@ class Kasper extends DataObject implements ApiInterface
      * @param DataObjectFactory $dataObjectFactory
      * @param KasperBuilder $kasperBuilder
      * @param array $data
+     * @param LoggerInterface|null $logger
+     * @param ApiConfiguration|null $apiConfiguration
      * @codeCoverageIgnore
      */
     public function __construct(
@@ -63,13 +78,17 @@ class Kasper extends DataObject implements ApiInterface
         Checkout $checkout,
         DataObjectFactory $dataObjectFactory,
         KasperBuilder $kasperBuilder,
-        array $data = []
+        array $data = [],
+        ?LoggerInterface $logger = null,
+        ?ApiConfiguration $apiConfiguration = null
     ) {
         parent::__construct($data);
         $this->kcoSession = $kcoSession;
         $this->checkout = $checkout;
         $this->dataObjectFactory = $dataObjectFactory;
         $this->kasperBuilder = $kasperBuilder;
+        $this->logger = $logger ?: ObjectManager::getInstance()->get(LoggerInterface::class);
+        $this->apiConfiguration = $apiConfiguration ?: ObjectManager::getInstance()->get(ApiConfiguration::class);
     }
 
     /**
@@ -89,10 +108,57 @@ class Kasper extends DataObject implements ApiInterface
             $klarnaOrder = $this->dataObjectFactory->create(['data' => $klarnaOrder]);
         }
 
+        $this->logRecurringNotEnabled($data, $klarnaOrder);
         $this->checkOrderStatus($klarnaOrder);
         $this->setKlarnaOrder($klarnaOrder);
 
         return $klarnaOrder;
+    }
+
+    /**
+     * Logs an explicit error if Kustom rejected a recurring create request because recurring is not enabled
+     *
+     * Only logs. The checkout fails exactly as for any other error. Never logs credentials.
+     *
+     * @param array $request
+     * @param DataObject $klarnaOrder
+     * @return void
+     */
+    private function logRecurringNotEnabled(array $request, DataObject $klarnaOrder): void
+    {
+        if ($klarnaOrder->getIsSuccessful() || ($request['recurring'] ?? false) !== true) {
+            return;
+        }
+        if ((int)$klarnaOrder->getResponseStatusCode() !== self::HTTP_BAD_REQUEST
+            || $klarnaOrder->getErrorCode() !== 'BAD_VALUE'
+        ) {
+            return;
+        }
+        $messages = $klarnaOrder->getErrorMessages();
+        $messages = is_array($messages) ? $messages : [(string)$messages];
+        if (stripos(implode(' ', array_map('strval', $messages)), 'recurring') === false) {
+            return;
+        }
+
+        try {
+            $quote = $this->getQuote();
+            $store = $quote->getStore();
+            $mid = $this->apiConfiguration->getUserName($store, $quote->getBaseCurrencyCode());
+            $this->logger->error(sprintf(
+                'Recurring orders are not enabled for this merchant id. Kustom merchant support must enable '
+                . 'recurring for it. Store id: %s, quote id: %s, merchant id: %s, error_code: %s, '
+                . 'error_messages: %s, correlation_id: %s',
+                (string)$quote->getStoreId(),
+                (string)$quote->getId(),
+                (string)$mid,
+                (string)$klarnaOrder->getErrorCode(),
+                implode(' | ', array_map('strval', $messages)),
+                (string)$klarnaOrder->getCorrelationId()
+            ));
+        } catch (\Throwable $e) {
+            // The diagnostic line must never change how the checkout fails.
+            unset($e);
+        }
     }
 
     /**

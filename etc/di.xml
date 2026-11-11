@@ -141,4 +141,24 @@
             <argument name="lockManager" xsi:type="object">Magento\Framework\Lock\Backend\Database</argument>
         </arguments>
     </type>
+    <preference for="Klarna\Kco\Api\Data\CustomerTokenInterface" type="Klarna\Kco\Model\CustomerToken"/>
+    <preference for="Klarna\Kco\Api\CustomerTokenRepositoryInterface" type="Klarna\Kco\Model\CustomerTokenRepository"/>
+    <preference for="Klarna\Kco\Api\RecurringResolverInterface" type="Klarna\Kco\Model\Recurring\CompositeResolver"/>
+    <type name="Klarna\Kco\Model\Recurring\CompositeResolver">
+        <arguments>
+            <argument name="resolvers" xsi:type="array"/>
+        </arguments>
+    </type>
+    <type name="Magento\Sales\Api\OrderRepositoryInterface">
+        <plugin name="klarna_kco_order_customer_token" type="Klarna\Kco\Plugin\Sales\OrderRepositoryTokenPlugin"/>
+    </type>
+    <type name="Magento\Framework\Console\CommandListInterface">
+        <arguments>
+            <argument name="commands" xsi:type="array">
+                <item name="klarna_kco_recover_recurring_token" xsi:type="object">
+                    Klarna\Kco\Console\Command\RecoverRecurringToken
+                </item>
+            </argument>
+        </arguments>
+    </type>
 </config>
