@@ -13,7 +13,7 @@
         "kustom/module-admin-settings": "^1 || ^2",
         "kustom/module-base": "^12.0",
         "kustom/module-kss": "^3.2",
-        "kustom/module-logger": "^3.1.1",
+        "kustom/module-logger": "^3.0",
         "kustom/module-orderlines": "^3.0",
         "magento/framework": "^103",
         "monolog/monolog": "^2.3 || ^3.9.0",
