@@ -127,6 +127,21 @@ class InitializerRecurringTest extends TestCase
     /**
      * @covers ::updateKlarnaCheckout
      */
+    public function testRecreateEvaluatesTheResolverOnce(): void
+    {
+        $this->stored['is_recurring'] = 0;
+        $this->resolver->expects($this->once())->method('isRecurring')->willReturn(true);
+        $this->api->expects($this->once())->method('createOrder')
+            ->willReturn(new DataObject(['order_id' => self::NEW_ID]));
+
+        $this->model->updateKlarnaCheckout(self::OLD_ID);
+
+        $this->assertSame(1, $this->stored['is_recurring']);
+    }
+
+    /**
+     * @covers ::updateKlarnaCheckout
+     */
     public function testFlipTrueToFalseCreatesNewOrder(): void
     {
         $this->prepare(true, false);

@@ -161,7 +161,7 @@ class Initializer
         $storedCheckoutId = (string)$klarnaQuote->getKlarnaCheckoutId();
         if ($storedCheckoutId !== '' && (bool)$klarnaQuote->getData('is_recurring') !== $isRecurring) {
             // The offered payment methods differ between recurring and non-recurring orders: recreate.
-            $checkout = $this->createKlarnaCheckout();
+            $checkout = $this->createCheckoutOrder($isRecurring);
             $this->logger->info(sprintf(
                 'Kustom order recreated because the recurring state changed. Quote id: %s, '
                 . 'old Kustom order id: %s, new Kustom order id: %s, recurring: %s',
@@ -211,12 +211,25 @@ class Initializer
      */
     public function createKlarnaCheckout()
     {
+        return $this->createCheckoutOrder($this->recurringResolver->isRecurring($this->kcoSession->getQuote()));
+    }
+
+    /**
+     * Create the Kustom order and store the recurring state it was created with
+     *
+     * @param bool $isRecurring Resolver result, evaluated once by the caller
+     * @return DataObject
+     * @throws KlarnaException
+     * @throws \Magento\Framework\Exception\LocalizedException
+     */
+    private function createCheckoutOrder(bool $isRecurring): DataObject
+    {
         $this->klarnaCheckout = $this->getApiInstance($this->kcoSession->getQuote()->getStore())
             ->createOrder();
 
         $this->updateKssValues();
         $this->setKlarnaOrderid();
-        $this->setRecurringState($this->recurringResolver->isRecurring($this->kcoSession->getQuote()));
+        $this->setRecurringState($isRecurring);
         $this->saveKlarnaQuote();
         return $this->klarnaCheckout;
     }

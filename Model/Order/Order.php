@@ -274,7 +274,7 @@ class Order
         $this->orderRepository->save($this->klarnaOrder);
         $this->logger->debug('Saved the Kustom order');
 
-        $this->persistRecurringToken($klarnaApiOrder);
+        $this->persistRecurringToken($klarnaApiOrder, $klarnaQuote);
 
         return $this->mageOrder;
     }
@@ -283,16 +283,17 @@ class Order
      * Stores the recurring token of the Kustom order. A failure here must never block the order creation.
      *
      * @param DataObject $klarnaApiOrder
+     * @param mixed      $klarnaQuote Its stored is_recurring flag says if the checkout was requested as recurring
      * @return void
      */
-    private function persistRecurringToken(DataObject $klarnaApiOrder): void
+    private function persistRecurringToken(DataObject $klarnaApiOrder, $klarnaQuote): void
     {
         try {
             $this->tokenPersister->persist(
                 $klarnaApiOrder,
                 $this->mageOrder,
                 $this->klarnaOrder->getUsedMid(),
-                $this->mageQuote
+                (bool)$klarnaQuote->getData('is_recurring')
             );
         } catch (\Throwable $e) {
             // Neither the token nor the exception message (could contain column values) is logged.

@@ -11,7 +11,6 @@ namespace Klarna\Kco\Plugin\Sales;
 
 use Klarna\Kco\Api\CustomerTokenRepositoryInterface;
 use Klarna\Kco\Model\Payment\Kco;
-use Magento\Framework\AuthorizationInterface;
 use Magento\Sales\Api\Data\OrderInterface;
 use Magento\Sales\Api\Data\OrderSearchResultInterface;
 use Magento\Sales\Api\OrderRepositoryInterface;
@@ -19,10 +18,10 @@ use Magento\Sales\Api\OrderRepositoryInterface;
 /**
  * Adds the extension attribute `kustom_customer_token` to orders loaded through the order repository.
  *
- * The decrypted token is only populated when the current caller is allowed `Klarna_Kco::customer_token`
- * (admin session, or an integration holding that resource). Without authorisation (no session, CLI, cron,
- * storefront, REST without the resource) the attribute stays null. Orders loaded through factories or
- * collections do not get the attribute. Only orders paid with Kustom Checkout (`klarna_kco`) are looked up.
+ * The decrypted token is populated for every PHP caller (cron and queue code has no admin user). REST and SOAP
+ * only return it to callers allowed `Klarna_Kco::customer_token`, enforced by the `<resources>` check of the
+ * extension attribute in `etc/extension_attributes.xml`. Orders loaded through factories or collections do not
+ * get the attribute. Only orders paid with Kustom Checkout (`klarna_kco`) are looked up.
  *
  * @internal
  */
@@ -34,22 +33,14 @@ class OrderRepositoryTokenPlugin
      * @var CustomerTokenRepositoryInterface
      */
     private CustomerTokenRepositoryInterface $tokenRepository;
-    /**
-     * @var AuthorizationInterface
-     */
-    private AuthorizationInterface $authorization;
 
     /**
      * @param CustomerTokenRepositoryInterface $tokenRepository
-     * @param AuthorizationInterface           $authorization
      * @codeCoverageIgnore
      */
-    public function __construct(
-        CustomerTokenRepositoryInterface $tokenRepository,
-        AuthorizationInterface $authorization
-    ) {
+    public function __construct(CustomerTokenRepositoryInterface $tokenRepository)
+    {
         $this->tokenRepository = $tokenRepository;
-        $this->authorization = $authorization;
     }
 
     /**
@@ -62,10 +53,6 @@ class OrderRepositoryTokenPlugin
      */
     public function afterGet(OrderRepositoryInterface $subject, OrderInterface $result): OrderInterface
     {
-        if (!$this->isAllowed()) {
-            return $result;
-        }
-
         $orderId = (int)$result->getEntityId();
         if ($orderId === 0 || !$this->isKustomOrder($result)) {
             return $result;
@@ -88,10 +75,6 @@ class OrderRepositoryTokenPlugin
         OrderRepositoryInterface $subject,
         OrderSearchResultInterface $result
     ): OrderSearchResultInterface {
-        if (!$this->isAllowed()) {
-            return $result;
-        }
-
         $orders = $result->getItems();
         $orderIds = [];
         foreach ($orders as $order) {
@@ -158,20 +141,6 @@ class OrderRepositoryTokenPlugin
         try {
             $payment = $order->getPayment();
             return $payment !== null && $payment->getMethod() === Kco::METHOD_CODE;
-        } catch (\Throwable $e) {
-            return false;
-        }
-    }
-
-    /**
-     * Fail closed: any problem resolving the ACL means not allowed
-     *
-     * @return bool
-     */
-    private function isAllowed(): bool
-    {
-        try {
-            return $this->authorization->isAllowed(self::ACL_RESOURCE);
         } catch (\Throwable $e) {
             return false;
         }

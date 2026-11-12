@@ -18,6 +18,7 @@ use Klarna\Kco\Model\Cart\Validations\Handler;
 use Klarna\Kco\Model\Checkout\Kco\Initializer;
 use Klarna\Kco\Model\Checkout\Kco\Session as KcoSession;
 use Klarna\Kco\Model\Order\Order;
+use Klarna\Kco\Model\Quote as KcoQuote;
 use Klarna\Kco\Model\Order\Shop\Action;
 use Klarna\Kco\Model\PaymentStatus;
 use Klarna\Kco\Model\Recurring\TokenPersister;
@@ -60,6 +61,9 @@ class OrderRecurringTokenTest extends TestCase
         $workflowProvider = $this->createMock(WorkflowProvider::class);
         $workflowProvider->method('getKlarnaOrder')->willReturnOnConsecutiveCalls($emptyKlarnaOrder, $klarnaOrder);
         $workflowProvider->method('getMagentoQuote')->willReturn($quote);
+        $kcoQuote = $this->createMock(KcoQuote::class);
+        $kcoQuote->method('getData')->with('is_recurring')->willReturn('1');
+        $workflowProvider->method('getKcoQuote')->willReturn($kcoQuote);
         $workflowProvider->expects($this->once())->method('clearKlarnaOrder');
 
         $searchResult = $this->createMock(OrderSearchResultInterface::class);
@@ -83,6 +87,7 @@ class OrderRecurringTokenTest extends TestCase
 
         $persister = $this->createMock(TokenPersister::class);
         $persister->expects($this->once())->method('persist')
+            ->with($checkout, $mageOrder, $this->anything(), true)
             ->willThrowException(new \RuntimeException('secret-token-value'));
 
         $logger = $this->createMock(LoggerInterface::class);

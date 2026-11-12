@@ -14,7 +14,6 @@ use Klarna\Kco\Model\CustomerTokenFactory;
 use Klarna\Kco\Model\Payment\Kco;
 use Klarna\Kco\Plugin\Sales\OrderRepositoryTokenPlugin;
 use Magento\Framework\App\ResourceConnection;
-use Magento\Framework\AuthorizationInterface;
 use Magento\Sales\Api\Data\OrderInterface;
 use Magento\Sales\Api\Data\OrderSearchResultInterface;
 use Magento\Sales\Api\OrderRepositoryInterface;
@@ -26,8 +25,9 @@ use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The plugin is called directly with a mocked ACL, with real tokens in the real table.
- * Orders are loaded through the factory so the global plugin (real ACL) does not interfere.
+ * The plugin is called directly, with real tokens in the real table. There is no admin session in these tests:
+ * PHP callers (cron, queue) get the token, REST/SOAP gating is covered by OrderTokenSerializationTest.
+ * Orders are loaded through the factory so the global plugin does not interfere.
  *
  * @magentoDbIsolation enabled
  * @magentoAppIsolation enabled
@@ -69,18 +69,9 @@ class OrderRepositoryTokenPluginTest extends TestCase
         $this->tokenRepository->save($token);
     }
 
-    public function testAfterGetLeavesTheAttributeNullWithoutAcl(): void
+    public function testAfterGetPopulatesTheDecryptedTokenWithoutAdminSession(): void
     {
-        $plugin = $this->createPlugin($this->tokenRepository, false);
-
-        $order = $plugin->afterGet($this->getRepository(), $this->loadOrder($this->orderId));
-
-        static::assertNull($order->getExtensionAttributes()->getKustomCustomerToken());
-    }
-
-    public function testAfterGetPopulatesTheDecryptedTokenWithAcl(): void
-    {
-        $plugin = $this->createPlugin($this->tokenRepository, true);
+        $plugin = $this->createPlugin($this->tokenRepository);
 
         $order = $plugin->afterGet($this->getRepository(), $this->loadOrder($this->orderId));
 
@@ -89,29 +80,13 @@ class OrderRepositoryTokenPluginTest extends TestCase
         static::assertSame(self::PLAIN_TOKEN, $token->getToken());
     }
 
-    public function testAfterGetListDeniedMakesNoQueryAndLeavesNull(): void
-    {
-        /** @var CustomerTokenRepositoryInterface|MockObject $spy */
-        $spy = $this->createMock(CustomerTokenRepositoryInterface::class);
-        $spy->expects($this->never())->method('getListByOrderIds');
-        $plugin = $this->createPlugin($spy, false);
-
-        $result = $plugin->afterGetList($this->getRepository(), $this->createSearchResult([
-            $this->loadOrder($this->orderId),
-        ]));
-
-        foreach ($result->getItems() as $order) {
-            static::assertNull($order->getExtensionAttributes()->getKustomCustomerToken());
-        }
-    }
-
     public function testAfterGetListBatchesOneQueryAndPopulatesOnlyOrdersWithAToken(): void
     {
         /** @var CustomerTokenRepositoryInterface|MockObject $spy */
         $spy = $this->createMock(CustomerTokenRepositoryInterface::class);
         $spy->expects($this->once())->method('getListByOrderIds')
             ->willReturnCallback(fn (array $ids) => $this->tokenRepository->getListByOrderIds($ids));
-        $plugin = $this->createPlugin($spy, true);
+        $plugin = $this->createPlugin($spy);
 
         $withToken = $this->loadOrder($this->orderId);
         $withoutToken = Bootstrap::getObjectManager()->create(Order::class);
@@ -132,16 +107,9 @@ class OrderRepositoryTokenPluginTest extends TestCase
         static::assertNull($items[1]->getExtensionAttributes()->getKustomCustomerToken());
     }
 
-    public function testRealRepositoryGetListPopulatesTheTokenWithAclAllowed(): void
+    public function testRealRepositoryGetListPopulatesTheTokenWithoutAdminSession(): void
     {
         $objectManager = Bootstrap::getObjectManager();
-        $authorization = $this->createMock(AuthorizationInterface::class);
-        $authorization->method('isAllowed')->with(OrderRepositoryTokenPlugin::ACL_RESOURCE)->willReturn(true);
-        // The interception layer uses the shared plugin instance: give that one the allowing ACL (app isolation
-        // resets the object manager after the test).
-        $plugin = $objectManager->get(OrderRepositoryTokenPlugin::class);
-        $property = new \ReflectionProperty(OrderRepositoryTokenPlugin::class, 'authorization');
-        $property->setValue($plugin, $authorization);
         $repository = $objectManager->create(OrderRepositoryInterface::class);
         $criteria = $objectManager->create(\Magento\Framework\Api\SearchCriteriaBuilder::class)
             ->addFilter('entity_id', $this->orderId)
@@ -166,25 +134,17 @@ class OrderRepositoryTokenPluginTest extends TestCase
         /** @var CustomerTokenRepositoryInterface|MockObject $spy */
         $spy = $this->createMock(CustomerTokenRepositoryInterface::class);
         $spy->expects($this->never())->method('getListByOrderIds');
-        $plugin = $this->createPlugin($spy, true);
+        $plugin = $this->createPlugin($spy);
 
         $order = $plugin->afterGet($this->getRepository(), $this->loadOrder($this->orderId));
 
         static::assertNull($order->getExtensionAttributes()->getKustomCustomerToken());
     }
 
-    private function createPlugin(
-        CustomerTokenRepositoryInterface $repository,
-        bool $allowed
-    ): OrderRepositoryTokenPlugin {
-        $authorization = $this->createMock(AuthorizationInterface::class);
-        $authorization->method('isAllowed')
-            ->with(OrderRepositoryTokenPlugin::ACL_RESOURCE)
-            ->willReturn($allowed);
-
+    private function createPlugin(CustomerTokenRepositoryInterface $repository): OrderRepositoryTokenPlugin
+    {
         return Bootstrap::getObjectManager()->create(OrderRepositoryTokenPlugin::class, [
             'tokenRepository' => $repository,
-            'authorization' => $authorization,
         ]);
     }
 

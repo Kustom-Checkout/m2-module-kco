@@ -222,7 +222,7 @@ class TokenRecovery
                 $checkout->setData('order_id', $kustomOrderId);
             }
 
-            $this->tokenPersister->persist($checkout, $order, $klarnaOrder->getUsedMid(), null);
+            $this->tokenPersister->persist($checkout, $order, $klarnaOrder->getUsedMid());
 
             return $this->hasToken($order) ? self::OUTCOME_PERSISTED : self::OUTCOME_NO_TOKEN;
         } catch (\Throwable $e) {

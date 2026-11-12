@@ -154,8 +154,7 @@ class TokenRecoveryTest extends TestCase
         $this->persister->expects($this->once())->method('persist')->with(
             $this->callback(static fn(DataObject $c): bool => $c->getData('recurring_token') === self::SECRET),
             $order,
-            'mid-9',
-            null
+            'mid-9'
         );
 
         $result = $this->model->recoverByIncrementId(self::INCREMENT_ID);

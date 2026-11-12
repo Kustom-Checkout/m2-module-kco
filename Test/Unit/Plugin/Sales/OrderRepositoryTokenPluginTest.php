@@ -12,7 +12,6 @@ namespace Klarna\Kco\Test\Unit\Plugin\Sales;
 use Klarna\Kco\Api\CustomerTokenRepositoryInterface;
 use Klarna\Kco\Api\Data\CustomerTokenInterface;
 use Klarna\Kco\Plugin\Sales\OrderRepositoryTokenPlugin;
-use Magento\Framework\AuthorizationInterface;
 use Magento\Sales\Api\Data\OrderInterface;
 use Magento\Sales\Api\Data\OrderPaymentInterface;
 use Magento\Sales\Api\Data\OrderSearchResultInterface;
@@ -24,8 +23,6 @@ class OrderRepositoryTokenPluginTest extends TestCase
 {
     /** @var CustomerTokenRepositoryInterface&MockObject */
     private $tokenRepository;
-    /** @var AuthorizationInterface&MockObject */
-    private $authorization;
     /** @var OrderRepositoryInterface&MockObject */
     private $subject;
     private OrderRepositoryTokenPlugin $plugin;
@@ -33,16 +30,8 @@ class OrderRepositoryTokenPluginTest extends TestCase
     protected function setUp(): void
     {
         $this->tokenRepository = $this->createMock(CustomerTokenRepositoryInterface::class);
-        $this->authorization = $this->createMock(AuthorizationInterface::class);
         $this->subject = $this->createMock(OrderRepositoryInterface::class);
-        $this->plugin = new OrderRepositoryTokenPlugin($this->tokenRepository, $this->authorization);
-    }
-
-    private function allow(bool $allowed): void
-    {
-        $this->authorization->method('isAllowed')
-            ->with('Klarna_Kco::customer_token')
-            ->willReturn($allowed);
+        $this->plugin = new OrderRepositoryTokenPlugin($this->tokenRepository);
     }
 
     /**
@@ -77,7 +66,6 @@ class OrderRepositoryTokenPluginTest extends TestCase
 
     public function testAfterGetTokenLookupFailureLeavesTheAttributeNull(): void
     {
-        $this->allow(true);
         [$order, $extension] = $this->order(5);
         $this->tokenRepository->method('getListByOrderIds')->willThrowException(new \RuntimeException('db down'));
 
@@ -87,7 +75,6 @@ class OrderRepositoryTokenPluginTest extends TestCase
 
     public function testAfterGetListTokenLookupFailureLeavesTheAttributesNull(): void
     {
-        $this->allow(true);
         [$o1, $e1] = $this->order(1);
         $this->tokenRepository->method('getListByOrderIds')->willThrowException(new \RuntimeException('db down'));
         $result = $this->createMock(OrderSearchResultInterface::class);
@@ -97,29 +84,8 @@ class OrderRepositoryTokenPluginTest extends TestCase
         $this->assertSame(0, $e1->calls);
     }
 
-    public function testAfterGetDeniedDoesNotQueryNorPopulate(): void
+    public function testAfterGetPopulatesTokenForPhpCallersWithoutAdminSession(): void
     {
-        $this->allow(false);
-        [$order, $extension] = $this->order(5);
-        $this->tokenRepository->expects($this->never())->method('getListByOrderIds');
-
-        $this->assertSame($order, $this->plugin->afterGet($this->subject, $order));
-        $this->assertSame(0, $extension->calls);
-    }
-
-    public function testAclExceptionFailsClosed(): void
-    {
-        $this->authorization->method('isAllowed')->willThrowException(new \RuntimeException('no acl'));
-        [$order, $extension] = $this->order(5);
-        $this->tokenRepository->expects($this->never())->method('getListByOrderIds');
-
-        $this->plugin->afterGet($this->subject, $order);
-        $this->assertSame(0, $extension->calls);
-    }
-
-    public function testAfterGetAllowedPopulatesToken(): void
-    {
-        $this->allow(true);
         [$order, $extension] = $this->order(5);
         $token = $this->createMock(CustomerTokenInterface::class);
         $this->tokenRepository->expects($this->once())->method('getListByOrderIds')
@@ -131,7 +97,6 @@ class OrderRepositoryTokenPluginTest extends TestCase
 
     public function testAfterGetOrderWithoutTokenRowStaysNull(): void
     {
-        $this->allow(true);
         [$order, $extension] = $this->order(5);
         $this->tokenRepository->method('getListByOrderIds')->willReturn([]);
 
@@ -142,7 +107,6 @@ class OrderRepositoryTokenPluginTest extends TestCase
 
     public function testAfterGetListUsesOneQueryAndSkipsOrdersWithoutToken(): void
     {
-        $this->allow(true);
         [$o1, $e1] = $this->order(1);
         [$o2, $e2] = $this->order(2);
         [$o3, $e3] = $this->order(3);
@@ -159,21 +123,8 @@ class OrderRepositoryTokenPluginTest extends TestCase
         $this->assertSame($t3, $e3->token);
     }
 
-    public function testAfterGetListDeniedDoesNotQuery(): void
-    {
-        $this->allow(false);
-        [$o1, $e1] = $this->order(1);
-        $this->tokenRepository->expects($this->never())->method('getListByOrderIds');
-        $result = $this->createMock(OrderSearchResultInterface::class);
-        $result->method('getItems')->willReturn([$o1]);
-
-        $this->plugin->afterGetList($this->subject, $result);
-        $this->assertSame(0, $e1->calls);
-    }
-
     public function testEmptyListDoesNotQuery(): void
     {
-        $this->allow(true);
         $this->tokenRepository->expects($this->never())->method('getListByOrderIds');
         $result = $this->createMock(OrderSearchResultInterface::class);
         $result->method('getItems')->willReturn([]);
@@ -183,7 +134,6 @@ class OrderRepositoryTokenPluginTest extends TestCase
 
     public function testAfterGetNonKustomOrderDoesNotQuery(): void
     {
-        $this->allow(true);
         [$order, $extension] = $this->order(5, 'checkmo');
         $this->tokenRepository->expects($this->never())->method('getListByOrderIds');
         $this->tokenRepository->expects($this->never())->method('getByOrderId');
@@ -194,7 +144,6 @@ class OrderRepositoryTokenPluginTest extends TestCase
 
     public function testAfterGetOrderWithoutPaymentDoesNotQueryNorFail(): void
     {
-        $this->allow(true);
         [$order, $extension] = $this->order(5, null);
         $this->tokenRepository->expects($this->never())->method('getListByOrderIds');
 
@@ -204,7 +153,6 @@ class OrderRepositoryTokenPluginTest extends TestCase
 
     public function testAfterGetPaymentThrowingDoesNotQueryNorFail(): void
     {
-        $this->allow(true);
         $order = $this->createMock(OrderInterface::class);
         $order->method('getEntityId')->willReturn(5);
         $order->method('getPayment')->willThrowException(new \RuntimeException('boom'));
@@ -215,7 +163,6 @@ class OrderRepositoryTokenPluginTest extends TestCase
 
     public function testAfterGetListOnlyNonKustomOrdersDoesNotQuery(): void
     {
-        $this->allow(true);
         [$o1, $e1] = $this->order(1, 'checkmo');
         [$o2, $e2] = $this->order(2, null);
         $this->tokenRepository->expects($this->never())->method('getListByOrderIds');
@@ -228,7 +175,6 @@ class OrderRepositoryTokenPluginTest extends TestCase
 
     public function testAfterGetListQueriesOnlyKustomOrderIds(): void
     {
-        $this->allow(true);
         [$o1] = $this->order(1, 'checkmo');
         [$o2, $e2] = $this->order(2);
         [$o3] = $this->order(3, null);

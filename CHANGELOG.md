@@ -10,7 +10,7 @@
 * KUSTOM-123: Create and update checkout requests send `recurring` and `options.subscription_buy_button` for recurring quotes
 * KUSTOM-123: The Kustom order is recreated instead of updated when the recurring state of the cart changes
 * KUSTOM-123: Added table `kustom_customer_token`; the encrypted recurring token is saved when the order is created after checkout
-* KUSTOM-123: Orders carry the extension attribute `kustom_customer_token`, only for callers allowed `Klarna_Kco::customer_token`
+* KUSTOM-123: Orders carry the extension attribute `kustom_customer_token`; REST and SOAP return it only to callers allowed `Klarna_Kco::customer_token`
 * KUSTOM-123: Admin order view shows the recurring token masked, only for admins allowed `Klarna_Kco::customer_token`
 * KUSTOM-123: Added command `kustom:recurring:recover-token` to store the missing recurring token of existing orders
 * KUSTOM-123: Logging an explicit error when recurring is not enabled for the merchant id

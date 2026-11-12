@@ -11,7 +11,6 @@ namespace Klarna\Kco\Test\Unit\Model\Recurring;
 
 use Klarna\Kco\Api\CustomerTokenRepositoryInterface;
 use Klarna\Kco\Api\Data\CustomerTokenInterfaceFactory;
-use Klarna\Kco\Api\RecurringResolverInterface;
 use Klarna\Kco\Model\CustomerToken;
 use Klarna\Kco\Model\Recurring\TokenPersister;
 use Klarna\Kco\Model\ResourceModel\CustomerToken as CustomerTokenResource;
@@ -20,7 +19,6 @@ use Magento\Framework\DataObject;
 use Magento\Framework\Exception\CouldNotSaveException;
 use Magento\Framework\Model\Context;
 use Magento\Framework\Registry;
-use Magento\Quote\Api\Data\CartInterface;
 use Magento\Sales\Api\Data\OrderInterface;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -41,10 +39,6 @@ class TokenPersisterTest extends TestCase
      */
     private $logger;
     /**
-     * @var RecurringResolverInterface|MockObject
-     */
-    private $resolver;
-    /**
      * @var TokenPersister
      */
     private $model;
@@ -53,10 +47,9 @@ class TokenPersisterTest extends TestCase
     {
         $this->repository = $this->createMock(CustomerTokenRepositoryInterface::class);
         $this->logger = $this->createMock(LoggerInterface::class);
-        $this->resolver = $this->createMock(RecurringResolverInterface::class);
         $factory = $this->createMock(CustomerTokenInterfaceFactory::class);
         $factory->method('create')->willReturnCallback(fn(): CustomerToken => $this->newToken());
-        $this->model = new TokenPersister($this->repository, $factory, $this->logger, $this->resolver);
+        $this->model = new TokenPersister($this->repository, $factory, $this->logger);
     }
 
     /**
@@ -130,55 +123,77 @@ class TokenPersisterTest extends TestCase
     /**
      * @covers ::persist
      */
-    public function testRecurringQuoteWithoutRecurringKustomOrderWarns(): void
+    public function testRequestedButNoTokenWarnsOnceWithIdsOnly(): void
     {
-        $quote = $this->createStub(CartInterface::class);
-        $quote->method('getId')->willReturn('55');
-        $this->resolver->method('isRecurring')->willReturn(true);
+        $messages = [];
+        $this->logger->method('warning')->willReturnCallback(function ($message) use (&$messages): void {
+            $messages[] = (string)$message;
+        });
         $this->repository->expects(static::never())->method('saveIfNotExists');
-        $this->logger->expects(static::once())->method('warning')
-            ->with(static::logicalAnd(static::stringContains('55'), static::stringContains('K-1')));
 
-        $this->model->persist($this->checkout(false, null), $this->order(1), 'MID_1', $quote);
+        $this->model->persist($this->checkout(true, ''), $this->order(1), 'MID_1', true);
+        static::assertCount(1, $messages);
+        static::assertStringContainsString('K-1', $messages[0]);
+        static::assertStringContainsString('000000012', $messages[0]);
+        static::assertStringContainsString('store id: 3', $messages[0]);
+
+        $messages = [];
+        $this->model->persist($this->checkout(false, null), $this->order(1), 'MID_1', true);
+        static::assertCount(1, $messages);
     }
 
     /**
      * @covers ::persist
      */
-    public function testThrowingResolverDoesNotPreventTokenSave(): void
+    public function testRequestedWithTokenDoesNotWarn(): void
     {
-        $quote = $this->createStub(CartInterface::class);
-        $this->resolver->method('isRecurring')->willThrowException(new \RuntimeException('boom'));
         $this->repository->expects(static::once())->method('saveIfNotExists')
             ->willReturnCallback(fn(CustomerToken $token): CustomerToken => $token);
-
-        $this->model->persist($this->checkout(true, self::SECRET), $this->order(12), 'MID_1', $quote);
-    }
-
-    /**
-     * @covers ::persist
-     */
-    public function testRecurringQuoteWithRecurringKustomOrderDoesNotWarn(): void
-    {
-        $quote = $this->createStub(CartInterface::class);
-        $this->resolver->method('isRecurring')->willReturn(true);
-        $this->repository->expects(static::once())->method('saveIfNotExists')
-            ->willReturnArgument(0);
         $this->logger->expects(static::never())->method('warning');
 
-        $this->model->persist($this->checkout(true, self::SECRET), $this->order(1), 'MID_1', $quote);
+        $this->model->persist($this->checkout(true, self::SECRET), $this->order(1), 'MID_1', true);
     }
 
     /**
      * @covers ::persist
      */
-    public function testNonRecurringQuoteDoesNotWarn(): void
+    public function testNotRequestedAndNoTokenDoesNotWarn(): void
     {
-        $quote = $this->createStub(CartInterface::class);
-        $this->resolver->method('isRecurring')->willReturn(false);
-        $this->logger->expects(static::never())->method(static::anything());
+        $this->logger->expects(static::never())->method('warning');
 
-        $this->model->persist($this->checkout(false, null), $this->order(1), 'MID_1', $quote);
+        $this->model->persist($this->checkout(false, null), $this->order(1), 'MID_1', false);
+    }
+
+    /**
+     * @covers ::persist
+     */
+    public function testWarningNeverContainsTheToken(): void
+    {
+        $messages = [];
+        $this->logger->method('warning')->willReturnCallback(function ($message) use (&$messages): void {
+            $messages[] = (string)$message;
+        });
+
+        $this->model->persist(
+            new DataObject(['order_id' => 'K-1', 'recurring' => false, 'recurring_token' => self::SECRET]),
+            $this->order(1),
+            'MID_1',
+            true
+        );
+
+        static::assertCount(1, $messages);
+        static::assertStringNotContainsString(self::SECRET, $messages[0]);
+    }
+
+    /**
+     * @covers ::persist
+     */
+    public function testThrowingLoggerNeverBreaksPersist(): void
+    {
+        $this->logger->method('warning')->willThrowException(new \RuntimeException('log down'));
+
+        $this->model->persist($this->checkout(false, null), $this->order(1), 'MID_1', true);
+        static::assertTrue(true);
     }
 
     /**

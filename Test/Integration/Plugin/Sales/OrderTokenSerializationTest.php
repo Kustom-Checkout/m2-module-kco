@@ -28,9 +28,10 @@ use PHPUnit\Framework\TestCase;
  * REST layer uses to build the response, with the ACL decision of the caller swapped (app isolation resets it).
  *
  * This is not a Web API functional test: no HTTP request, no integration token and no real role/rule rows are
- * involved. It proves that both gates (the repository plugin and the `<resources>` check of the extension
- * attribute in `etc/extension_attributes.xml`) keep `kustom_customer_token` out of the serialised order when the
- * decision for `Klarna_Kco::customer_token` is "denied", and that it is present when it is "allowed".
+ * involved. The repository plugin populates the attribute for every PHP caller; the `<resources>` check of the
+ * extension attribute in `etc/extension_attributes.xml` is the only gate. It proves that the permission-checked
+ * processor omits `kustom_customer_token` when the decision for `Klarna_Kco::customer_token` is "denied", and
+ * includes it when it is "allowed".
  *
  * @magentoDbIsolation enabled
  * @magentoAppIsolation enabled
@@ -73,22 +74,14 @@ class OrderTokenSerializationTest extends TestCase
 
     public function testTokenIsNotSerialisedWhenTheCallerLacksTheResource(): void
     {
-        $this->setDecisions(false, false);
-
-        static::assertArrayNotHasKey('kustom_customer_token', $this->serialisedExtensionAttributes());
-    }
-
-    public function testTokenIsNotSerialisedWhenOnlyTheExtensionAttributeResourceDenies(): void
-    {
-        // The repository plugin populates the attribute; only the `<resources>` check can keep it out.
-        $this->setDecisions(true, false);
+        $this->setProcessorDecision(false);
 
         static::assertArrayNotHasKey('kustom_customer_token', $this->serialisedExtensionAttributes());
     }
 
     public function testTokenIsSerialisedWhenTheCallerHoldsTheResource(): void
     {
-        $this->setDecisions(true, true);
+        $this->setProcessorDecision(true);
 
         $attributes = $this->serialisedExtensionAttributes();
 
@@ -113,21 +106,16 @@ class OrderTokenSerializationTest extends TestCase
      * `isPermissionChecked` on), so a permission-checked one is built here, like the REST layer's
      * `DataObjectProcessorPermissionChecked`, with the ACL decision of the caller as given.
      *
-     * @param bool $pluginAllowed
-     * @param bool $processorAllowed
+     * @param bool $allowed
      * @return void
      */
-    private function setDecisions(bool $pluginAllowed, bool $processorAllowed): void
+    private function setProcessorDecision(bool $allowed): void
     {
         $objectManager = Bootstrap::getObjectManager();
-        $plugin = $objectManager->get(OrderRepositoryTokenPlugin::class);
-        $property = new \ReflectionProperty(OrderRepositoryTokenPlugin::class, 'authorization');
-        $property->setValue($plugin, $this->authorization($pluginAllowed));
-
         $extensionAttributesProcessor = $objectManager->create(
             ExtensionAttributesProcessor::class,
             [
-                'authorization' => $this->authorization($processorAllowed),
+                'authorization' => $this->authorization($allowed),
                 'isPermissionChecked' => true
             ]
         );
