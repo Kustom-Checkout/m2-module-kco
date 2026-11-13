@@ -296,12 +296,13 @@ class Order
                 (bool)$klarnaQuote->getData('is_recurring')
             );
         } catch (\Throwable $e) {
-            // Neither the token nor the exception message (could contain column values) is logged.
+            // The token itself is never logged.
             $this->logger->error(sprintf(
-                'Recurring token could not be stored for Kustom order %s, increment %s: %s',
+                'Recurring token could not be stored for Kustom order %s, increment %s: %s: %s',
                 $klarnaApiOrder->getData('order_id') ?? '',
                 $this->mageOrder->getIncrementId() ?? '',
-                get_class($e)
+                get_class($e),
+                $e->getMessage()
             ));
         }
     }

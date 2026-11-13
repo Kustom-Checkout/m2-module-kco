@@ -18,7 +18,6 @@ use Magento\Framework\Registry;
 use Magento\Framework\View\Element\Template\Context;
 use Magento\Sales\Api\Data\OrderInterface;
 use Magento\Sales\Api\Data\OrderPaymentInterface;
-use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
@@ -46,29 +45,7 @@ class CustomerTokenTest extends TestCase
         );
     }
 
-    /**
-     * @return array<string, array{string, string}>
-     */
-    public static function maskProvider(): array
-    {
-        return [
-            'empty' => ['', ''],
-            '1 char' => ['a', '*'],
-            '2 chars' => ['ab', '**'],
-            '3 chars' => ['abc', '***'],
-            '4 chars' => ['abcd', '****'],
-            '5 chars' => ['abcde', '****bcde'],
-            'long' => ['0123456789abcdef', '****cdef'],
-        ];
-    }
-
-    #[DataProvider('maskProvider')]
-    public function testMask(string $token, string $expected): void
-    {
-        $this->assertSame($expected, $this->block->mask($token));
-    }
-
-    public function testMaskedTokenForAllowedAdmin(): void
+    public function testFullTokenForAllowedAdmin(): void
     {
         $this->allow(true);
         $this->withOrder(5);
@@ -76,8 +53,8 @@ class CustomerTokenTest extends TestCase
         $tokenData->method('getToken')->willReturn('secret-token-abcd');
         $this->repository->expects($this->once())->method('getByOrderId')->with(5)->willReturn($tokenData);
 
-        $this->assertSame('****abcd', $this->block->getMaskedToken());
-        $this->assertSame('****abcd', $this->block->getMaskedToken());
+        $this->assertSame('secret-token-abcd', $this->block->getToken());
+        $this->assertSame('secret-token-abcd', $this->block->getToken());
     }
 
     public function testAclDeniedDoesNotQueryTheRepository(): void
@@ -85,7 +62,7 @@ class CustomerTokenTest extends TestCase
         $this->allow(false);
         $this->repository->expects($this->never())->method('getByOrderId');
 
-        $this->assertNull($this->block->getMaskedToken());
+        $this->assertNull($this->block->getToken());
         $this->assertSame('', $this->renderHtml());
     }
 
@@ -95,7 +72,7 @@ class CustomerTokenTest extends TestCase
         $this->withOrder(5);
         $this->repository->method('getByOrderId')->willThrowException(new NoSuchEntityException());
 
-        $this->assertNull($this->block->getMaskedToken());
+        $this->assertNull($this->block->getToken());
         $this->assertSame('', $this->renderHtml());
     }
 
@@ -107,7 +84,7 @@ class CustomerTokenTest extends TestCase
         $tokenData->method('getToken')->willReturn('');
         $this->repository->method('getByOrderId')->willReturn($tokenData);
 
-        $this->assertNull($this->block->getMaskedToken());
+        $this->assertNull($this->block->getToken());
     }
 
     public function testNoCurrentOrderHidesBlock(): void
@@ -116,7 +93,7 @@ class CustomerTokenTest extends TestCase
         $this->registry->method('registry')->with('current_order')->willReturn(null);
         $this->repository->expects($this->never())->method('getByOrderId');
 
-        $this->assertNull($this->block->getMaskedToken());
+        $this->assertNull($this->block->getToken());
     }
 
     public function testNonKustomOrderDoesNotQueryTheRepository(): void
@@ -125,7 +102,7 @@ class CustomerTokenTest extends TestCase
         $this->withOrder(5, 'checkmo');
         $this->repository->expects($this->never())->method('getByOrderId');
 
-        $this->assertNull($this->block->getMaskedToken());
+        $this->assertNull($this->block->getToken());
     }
 
     public function testOrderWithoutPaymentDoesNotQueryTheRepository(): void
@@ -134,7 +111,7 @@ class CustomerTokenTest extends TestCase
         $this->withOrder(5, null);
         $this->repository->expects($this->never())->method('getByOrderId');
 
-        $this->assertNull($this->block->getMaskedToken());
+        $this->assertNull($this->block->getToken());
     }
 
     private function allow(bool $allowed): void

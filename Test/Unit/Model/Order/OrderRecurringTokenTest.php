@@ -88,13 +88,13 @@ class OrderRecurringTokenTest extends TestCase
         $persister = $this->createMock(TokenPersister::class);
         $persister->expects($this->once())->method('persist')
             ->with($checkout, $mageOrder, $this->anything(), true)
-            ->willThrowException(new \RuntimeException('secret-token-value'));
+            ->willThrowException(new \RuntimeException('column data too long'));
 
         $logger = $this->createMock(LoggerInterface::class);
         $logger->expects($this->once())->method('error')->with(
             $this->logicalAnd(
                 $this->stringContains('RuntimeException'),
-                $this->logicalNot($this->stringContains('secret-token-value'))
+                $this->stringContains('column data too long')
             )
         );
 

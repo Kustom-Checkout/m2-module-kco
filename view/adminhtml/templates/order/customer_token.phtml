@@ -12,13 +12,13 @@ use Magento\Framework\Escaper;
 
 /** @var CustomerToken $block */
 /** @var Escaper $escaper */
-$maskedToken = $block->getMaskedToken();
+$token = $block->getToken();
 ?>
-<?php if ($maskedToken !== null): ?>
+<?php if ($token !== null): ?>
 <table class="data-table admin__table-secondary">
     <tr>
         <th><?= $escaper->escapeHtml(__('Recurring token')) ?>:</th>
-        <td><?= $escaper->escapeHtml($maskedToken) ?></td>
+        <td><?= $escaper->escapeHtml($token) ?></td>
     </tr>
 </table>
 <?php endif; ?>

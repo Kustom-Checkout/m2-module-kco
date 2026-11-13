@@ -19,17 +19,14 @@ use Magento\Framework\View\Element\Template;
 use Magento\Framework\View\Element\Template\Context;
 
 /**
- * Shows the Kustom recurring customer token of the order in the admin order view, masked to its last 4 characters.
+ * Shows the Kustom recurring customer token of the order in the admin order view, with its full value.
  *
- * Only rendered when the admin holds `Klarna_Kco::customer_token` and a token row exists. The full token is
- * never passed to the template.
+ * Only rendered when the admin holds `Klarna_Kco::customer_token` and a token row exists.
  *
  * @internal
  */
 class CustomerToken extends Template
 {
-    private const VISIBLE_CHARACTERS = 4;
-
     /**
      * @var CustomerTokenRepositoryInterface
      */
@@ -45,7 +42,7 @@ class CustomerToken extends Template
     /**
      * @var string|null|false false = not resolved yet
      */
-    private $maskedToken = false;
+    private $resolvedToken = false;
 
     /**
      * @param Context $context
@@ -68,35 +65,17 @@ class CustomerToken extends Template
     }
 
     /**
-     * Masked token (e.g. ****abcd), or null when the block must stay hidden
+     * The token, or null when the block must stay hidden
      *
      * @return string|null
      */
-    public function getMaskedToken(): ?string
+    public function getToken(): ?string
     {
-        if ($this->maskedToken !== false) {
-            return $this->maskedToken;
+        if ($this->resolvedToken !== false) {
+            return $this->resolvedToken;
         }
-        $this->maskedToken = $this->resolveMaskedToken();
-        return $this->maskedToken;
-    }
-
-    /**
-     * Mask all but the last 4 characters; tokens of 4 characters or fewer are fully masked
-     *
-     * @param string $token
-     * @return string
-     */
-    public function mask(string $token): string
-    {
-        $length = mb_strlen($token);
-        if ($length === 0) {
-            return '';
-        }
-        if ($length <= self::VISIBLE_CHARACTERS) {
-            return str_repeat('*', $length);
-        }
-        return '****' . mb_substr($token, -self::VISIBLE_CHARACTERS);
+        $this->resolvedToken = $this->resolveToken();
+        return $this->resolvedToken;
     }
 
     /**
@@ -104,7 +83,7 @@ class CustomerToken extends Template
      */
     protected function _toHtml()
     {
-        if ($this->getMaskedToken() === null) {
+        if ($this->getToken() === null) {
             return '';
         }
         return parent::_toHtml();
@@ -113,7 +92,7 @@ class CustomerToken extends Template
     /**
      * @return string|null
      */
-    private function resolveMaskedToken(): ?string
+    private function resolveToken(): ?string
     {
         if (!$this->authorization->isAllowed(OrderRepositoryTokenPlugin::ACL_RESOURCE)) {
             return null;
@@ -134,7 +113,7 @@ class CustomerToken extends Template
         if ($value === null || $value === '') {
             return null;
         }
-        return $this->mask($value);
+        return $value;
     }
 
     /**
