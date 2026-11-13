@@ -13,4 +13,11 @@
         <attribute code="kss_shipping_gateway" type="Klarna\Kss\Api\ShippingMethodGatewayInterface"/>
         <attribute code="kss_quote" type="Magento\Quote\Api\Data\CartInterface"/>
     </extension_attributes>
+    <extension_attributes for="Magento\Sales\Api\Data\OrderInterface">
+        <attribute code="kustom_customer_token" type="Klarna\Kco\Api\Data\CustomerTokenInterface">
+            <resources>
+                <resource ref="Klarna_Kco::customer_token"/>
+            </resources>
+        </attribute>
+    </extension_attributes>
 </config>

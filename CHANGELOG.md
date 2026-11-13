@@ -1,5 +1,24 @@
 # Changelog
 
+## 12.5.0 / 2026-11-11
+
+### Breaking changes
+* None
+
+### Features / changes
+* KUSTOM-123: Added extension point `Klarna\Kco\Api\RecurringResolverInterface` to mark a checkout as recurring
+* KUSTOM-123: Create and update checkout requests send `recurring` and `options.subscription_buy_button` for recurring quotes
+* KUSTOM-123: The Kustom order is recreated instead of updated when the recurring state of the cart changes
+* KUSTOM-123: Added table `kustom_customer_token`; the encrypted recurring token is saved when the order is created after checkout
+* KUSTOM-123: Orders carry the extension attribute `kustom_customer_token`; REST and SOAP return it only to callers allowed `Klarna_Kco::customer_token`
+* KUSTOM-123: Admin order view shows the recurring token, only for admins allowed `Klarna_Kco::customer_token`
+* KUSTOM-123: Added command `kustom:recurring:recover-token` to store the missing recurring token of existing orders
+* KUSTOM-123: Logging an explicit error when recurring is not enabled for the merchant id
+* KUSTOM-123: Requires module-logger 3.1.1
+
+### Fixes
+* KUSTOM-123: Fixed the error 500 on `kco/api/getAddresses` when the billing or shipping address has no region
+
 ## 12.4.4 / 2026-10-12
 
 ### Breaking changes

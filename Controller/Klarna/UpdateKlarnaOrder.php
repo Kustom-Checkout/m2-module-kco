@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -69,8 +69,20 @@ class UpdateKlarnaOrder implements HttpPostActionInterface
     public function execute()
     {
         try {
+            $kcoSession = $this->initializer->getKcoSession();
+            $oldCheckoutId = (string)$kcoSession->getKlarnaQuote()->getKlarnaCheckoutId();
+            $oldRecurring = (bool)$kcoSession->getKlarnaQuote()->getData('is_recurring');
             $this->initializer->updateKlarnaTotals();
-            return $this->ajax->getSummaryResponse();
+            $newCheckoutId = (string)$kcoSession->getKlarnaQuote()->getKlarnaCheckoutId();
+            $newRecurring = (bool)$kcoSession->getKlarnaQuote()->getData('is_recurring');
+
+            $data = [];
+            if ($oldCheckoutId !== '' && $oldCheckoutId !== $newCheckoutId && $oldRecurring !== $newRecurring) {
+                // The Kustom order was recreated because the recurring state flipped: render the new one.
+                // An expired-order recreate with an unchanged recurring state keeps the previous response.
+                $data['html_snippet'] = $this->initializer->getLatestKlarnaCheckout()->getHtmlSnippet();
+            }
+            return $this->ajax->getSummaryResponse($data);
         } catch (Exception $e) {
             $this->logger->critical($e);
             $this->manager->addErrorMessage($e->getMessage());
