@@ -63,6 +63,7 @@ class KasperRecurringTest extends TestCase
      * @covers ::generateCreateRequest
      * @covers ::generateUpdateRequest
      * @covers ::handleRecurring
+     * @dataProvider requestMethodProvider
      */
     #[DataProvider('requestMethodProvider')]
     public function testRecurringQuoteAddsFlagAndKeepsExistingOptions(string $method): void
@@ -82,6 +83,7 @@ class KasperRecurringTest extends TestCase
     /**
      * @param string $method
      * @covers ::handleRecurring
+     * @dataProvider requestMethodProvider
      */
     #[DataProvider('requestMethodProvider')]
     public function testNonRecurringQuoteLeavesPayloadUntouched(string $method): void

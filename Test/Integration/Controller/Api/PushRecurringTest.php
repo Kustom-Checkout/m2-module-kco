@@ -14,9 +14,13 @@ use Klarna\Kco\Api\CustomerTokenRepositoryInterface;
 use Klarna\Kco\Controller\Klarna\Confirmation;
 use Klarna\Kco\Model\Api\Rest\Service\Checkout;
 use Klarna\Kco\Model\Recurring\TokenPersister;
+use Magento\Checkout\Model\Type\Onepage;
+use Magento\Customer\Api\Data\GroupInterface;
 use Magento\Framework\App\Request\Http;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\Controller\Result\Redirect;
+use Magento\Quote\Model\Quote;
+use Magento\Quote\Model\ResourceModel\Quote as QuoteResource;
 use Magento\Sales\Model\ResourceModel\Order\CollectionFactory as OrderCollectionFactory;
 use Magento\TestFramework\TestCase\AbstractController;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -69,26 +73,32 @@ class PushRecurringTest extends AbstractController
      */
     public function testPushTwiceStoresOneEncryptedTokenAndCreatesTheOrderOnce(): void
     {
-        $checkoutCalls = static::any();
-        $this->checkoutMock->expects($checkoutCalls)->method('getOrder')
-            ->willReturn($this->getCheckoutResponse(true));
+        // Counted by hand: InvocationOrder::numberOfInvocations() does not exist in PHPUnit 9 (Magento 2.4.5).
+        $checkoutCalls = 0;
+        $response = $this->getCheckoutResponse(true);
+        $this->checkoutMock->method('getOrder')->willReturnCallback(
+            static function () use (&$checkoutCalls, $response): array {
+                $checkoutCalls++;
+                return $response;
+            }
+        );
 
         $this->orderManagementMock->expects(static::atLeastOnce())->method('acknowledgeOrder');
 
         $this->push();
-        static::assertGreaterThan(0, $checkoutCalls->numberOfInvocations());
+        static::assertGreaterThan(0, $checkoutCalls);
         static::assertSame(200, $this->getResponse()->getHttpResponseCode());
         static::assertSame(1, $this->getOrderCount());
         static::assertSame(1, $this->getTokenRowCount());
 
         // The second push runs the action itself (a second dispatch() in the same app instance 404s).
-        $checkoutCallsAfterFirstPush = $checkoutCalls->numberOfInvocations();
+        $checkoutCallsAfterFirstPush = $checkoutCalls;
         $this->resetRequest();
         $this->getRequest()->setParam('id', self::KUSTOM_ORDER_ID);
         $second = $this->_objectManager->create(\Klarna\Kco\Controller\Api\Push::class)->execute();
         static::assertInstanceOf(\Magento\Framework\Controller\Result\Json::class, $second);
         // The existing order is not created or persisted again: no second token write path is reached.
-        static::assertSame($checkoutCallsAfterFirstPush, $checkoutCalls->numberOfInvocations());
+        static::assertSame($checkoutCallsAfterFirstPush, $checkoutCalls);
 
         static::assertSame(1, $this->getOrderCount());
         static::assertSame(1, $this->getTokenRowCount());
@@ -170,6 +180,72 @@ class PushRecurringTest extends AbstractController
         static::assertSame(200, $this->getResponse()->getHttpResponseCode());
         static::assertSame(1, $this->getOrderCount());
         static::assertSame(0, $this->getTokenRowCount());
+    }
+
+    /**
+     * Guest checkout: the order is placed as a guest and the token row has no customer id.
+     *
+     * @magentoAppIsolation enabled
+     * @magentoDbIsolation enabled
+     * @magentoConfigFixture current_store payment/klarna_kco/active 1
+     * @magentoConfigFixture current_store checkout/klarna_kco/guest_checkout 1
+     * @magentoConfigFixture current_store general/region/state_required ''
+     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/quote_setup1_single_simple_product.php
+     */
+    public function testGuestPushStoresTokenWithoutCustomerId(): void
+    {
+        $this->turnFixtureQuoteIntoGuestQuote();
+        $this->checkoutMock->method('getOrder')->willReturn($this->getCheckoutResponse(true));
+        $this->orderManagementMock->expects(static::atLeastOnce())->method('acknowledgeOrder');
+
+        $this->push();
+
+        static::assertSame(200, $this->getResponse()->getHttpResponseCode());
+        static::assertSame(1, $this->getOrderCount());
+
+        $order = $this->_objectManager->get(OrderCollectionFactory::class)->create()->getFirstItem();
+        static::assertNull($order->getCustomerId());
+        static::assertSame(1, (int)$order->getCustomerIsGuest());
+
+        static::assertSame(1, $this->getTokenRowCount());
+        $row = $this->getTokenRow();
+        static::assertArrayHasKey('customer_id', $row);
+        static::assertNull($row['customer_id']);
+        static::assertSame((string)$order->getEntityId(), (string)$row['order_id']);
+
+        $stored = $this->_objectManager->get(CustomerTokenRepositoryInterface::class)
+            ->getByKustomOrderId(self::KUSTOM_ORDER_ID);
+        static::assertNull($stored->getCustomerId());
+        static::assertSame(self::PLAIN_TOKEN, $stored->getToken());
+    }
+
+    /**
+     * The shared fixture assigns a customer; drop it so the quote is placed as a guest.
+     */
+    private function turnFixtureQuoteIntoGuestQuote(): void
+    {
+        $quoteResource = $this->_objectManager->get(QuoteResource::class);
+        $quote = $this->_objectManager->create(Quote::class);
+        $quoteResource->load($quote, '100000001', 'reserved_order_id');
+        static::assertNotEmpty($quote->getId(), 'Fixture quote not found');
+
+        $quote->setCustomerId(null)
+            ->setCustomerIsGuest(true)
+            ->setCustomerGroupId(GroupInterface::NOT_LOGGED_IN_ID)
+            ->setCustomerEmail('guest@example.com')
+            ->setCheckoutMethod(Onepage::METHOD_GUEST);
+        $quoteResource->save($quote);
+    }
+
+    private function getTokenRow(): array
+    {
+        $resource = $this->_objectManager->get(ResourceConnection::class);
+        $connection = $resource->getConnection();
+        return (array)$connection->fetchRow(
+            $connection->select()
+                ->from($resource->getTableName('kustom_customer_token'))
+                ->where('kustom_order_id = ?', self::KUSTOM_ORDER_ID)
+        );
     }
 
     private function push(): void

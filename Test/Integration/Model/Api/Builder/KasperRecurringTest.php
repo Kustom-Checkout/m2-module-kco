@@ -27,6 +27,11 @@ use PHPUnit\Framework\TestCase;
  */
 class KasperRecurringTest extends TestCase
 {
+    /**
+     * The docblock annotation is for PHPUnit 9 (Magento 2.4.5), the attribute for PHPUnit 10+.
+     *
+     * @dataProvider methodProvider
+     */
     #[DataProvider('methodProvider')]
     public function testRecurringAddsOnlyTheSubscriptionFields(string $method): void
     {
@@ -47,6 +52,7 @@ class KasperRecurringTest extends TestCase
 
     /**
      * No resolver argument: the default DI resolver must not change the payload (non-regression for merchants).
+     * @dataProvider methodProvider
      */
     #[DataProvider('methodProvider')]
     public function testDefaultDiResolverLeavesThePayloadWithoutSubscriptionFields(string $method): void

@@ -49,6 +49,7 @@ class RecoverRecurringTokenTest extends TestCase
 
     /**
      * @covers ::execute
+     * @dataProvider outcomeProvider
      */
     #[DataProvider('outcomeProvider')]
     public function testPrintsIncrementIdAndOutcomeOnly(string $outcome, int $exitCode): void
@@ -112,6 +113,7 @@ class RecoverRecurringTokenTest extends TestCase
 
     /**
      * @covers ::execute
+     * @dataProvider invalidInputProvider
      */
     #[DataProvider('invalidInputProvider')]
     public function testInvalidInput(array $input): void

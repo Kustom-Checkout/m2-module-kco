@@ -224,6 +224,7 @@ class TokenRecoveryTest extends TestCase
 
     /**
      * @covers ::recoverByIncrementId
+     * @dataProvider notReadableProvider
      */
     #[DataProvider('notReadableProvider')]
     public function testNotReadable(array $response): void
