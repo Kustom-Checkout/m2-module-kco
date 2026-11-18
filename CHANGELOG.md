@@ -14,7 +14,6 @@
 * KUSTOM-123: Admin order view shows the recurring token, only for admins allowed `Klarna_Kco::customer_token`
 * KUSTOM-123: Added command `kustom:recurring:recover-token` to store the missing recurring token of existing orders
 * KUSTOM-123: Logging an explicit error when recurring is not enabled for the merchant id
-* KUSTOM-123: Requires module-logger 3.1.1
 
 ### Fixes
 * KUSTOM-123: Fixed the error 500 on `kco/api/getAddresses` when the billing or shipping address has no region
