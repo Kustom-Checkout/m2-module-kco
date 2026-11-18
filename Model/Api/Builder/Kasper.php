@@ -47,6 +47,7 @@ use Klarna\Kco\Model\Checkout\Checkbox\DataProvider;
 use Klarna\Orderlines\Model\Fpt\Validator as FptValidator;
 use Klarna\AdminSettings\Model\Configurations\Kco\Url as KcoUrl;
 use Magento\Framework\App\ObjectManager;
+use Klarna\Kco\Api\RecurringResolverInterface;
 
 /**
  * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
@@ -153,6 +154,10 @@ class Kasper implements BuilderInterface
      * @var KcoKlarnaConfig
      */
     private KcoKlarnaConfig $kcoKlarnaConfig;
+    /**
+     * @var RecurringResolverInterface
+     */
+    private RecurringResolverInterface $recurringResolver;
 
     /**
      * @param Url                                         $url
@@ -179,6 +184,7 @@ class Kasper implements BuilderInterface
      * @param B2b                                         $b2b
      * @param MagentoToKlarnaLocaleMapper                 $magentoToKlarnaLocaleMapper
      * @param KcoKlarnaConfig|null                        $kcoKlarnaConfig
+     * @param RecurringResolverInterface|null             $recurringResolver
      * @SuppressWarnings(PHPMD.ExcessiveParameterList)
      * @codeCoverageIgnore
      */
@@ -206,7 +212,8 @@ class Kasper implements BuilderInterface
         FptValidator $fptValidator,
         B2b $b2b,
         MagentoToKlarnaLocaleMapper $magentoToKlarnaLocaleMapper,
-        ?KcoKlarnaConfig $kcoKlarnaConfig = null
+        ?KcoKlarnaConfig $kcoKlarnaConfig = null,
+        ?RecurringResolverInterface $recurringResolver = null
     ) {
         $this->dataConverter            = $dataConverter;
         $this->calculator               = $calculator;
@@ -234,6 +241,9 @@ class Kasper implements BuilderInterface
         $this->kcoKlarnaConfig = $kcoKlarnaConfig ?: ObjectManager::getInstance()->get(
             KcoKlarnaConfig::class
         );
+        $this->recurringResolver = $recurringResolver ?: ObjectManager::getInstance()->get(
+            RecurringResolverInterface::class
+        );
     }
 
     /**
@@ -254,6 +264,7 @@ class Kasper implements BuilderInterface
 
         $this->handlePrefillNotice();
         $this->handlePackstationSettings();
+        $this->handleRecurring($quote);
 
         return $this;
     }
@@ -268,6 +279,7 @@ class Kasper implements BuilderInterface
 
         $this->handlePrefillNotice();
         $this->handlePackstationSettings();
+        $this->handleRecurring($quote);
 
         return $this;
     }
@@ -831,5 +843,25 @@ class Kasper implements BuilderInterface
             $request['options']['allow_separate_shipping_address'] = true;
             $parameter->setRequest($request);
         }
+    }
+
+    /**
+     * Mark the checkout as recurring (subscription) if a resolver says so for the quote
+     *
+     * Adds the top level `recurring` flag and `options.subscription_buy_button`. Nothing is added otherwise.
+     *
+     * @param CartInterface $quote
+     * @return void
+     */
+    private function handleRecurring(CartInterface $quote): void
+    {
+        if (!$this->recurringResolver->isRecurring($quote)) {
+            return;
+        }
+
+        $request = $this->parameter->getRequest();
+        $request['recurring'] = true;
+        $request['options']['subscription_buy_button'] = true;
+        $this->parameter->setRequest($request);
     }
 }

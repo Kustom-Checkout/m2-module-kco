@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <!--
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -15,6 +15,7 @@
         <column xsi:type="smallint" name="is_active" padding="6" unsigned="false" nullable="false" identity="false" default="0" comment="Is Active"/>
         <column xsi:type="int" name="quote_id" padding="10" unsigned="true" nullable="false" identity="false" comment="Quote Id"/>
         <column xsi:type="smallint" name="is_changed" padding="6" unsigned="false" nullable="false" identity="false" default="0" comment="Is Changed"/>
+        <column xsi:type="smallint" name="is_recurring" padding="6" unsigned="false" nullable="false" identity="false" default="0" comment="Is Recurring"/>
         <column name="created_at" xsi:type="timestamp" on_update="false" nullable="false" default="CURRENT_TIMESTAMP" comment="Created At"/>
         <column name="updated_at" xsi:type="timestamp" on_update="true" nullable="false" default="CURRENT_TIMESTAMP" comment="Updated At"/>
 
@@ -24,6 +25,39 @@
         <constraint xsi:type="foreign" referenceId="KLARNA_KCO_QUOTE_QUOTE_ID_QUOTE_ENTITY_ID" table="klarna_kco_quote" column="quote_id" referenceTable="quote" referenceColumn="entity_id" onDelete="CASCADE"/>
         <index referenceId="KLARNA_KCO_QUOTE_KLARNA_CHECKOUT_ID" indexType="btree">
             <column name="klarna_checkout_id"/>
+        </index>
+    </table>
+    <table name="kustom_customer_token" resource="default" engine="innodb" comment="Kustom Recurring Customer Token">
+        <column xsi:type="int" name="entity_id" padding="10" unsigned="true" nullable="false" identity="true" comment="Entity Id"/>
+        <column xsi:type="text" name="token" nullable="false" comment="Encrypted Customer Token"/>
+        <column xsi:type="varchar" name="kustom_order_id" nullable="false" length="255" comment="Kustom Order Id"/>
+        <column xsi:type="int" name="order_id" padding="10" unsigned="true" nullable="true" identity="false" comment="Magento Order Id"/>
+        <column xsi:type="varchar" name="increment_id" nullable="false" length="50" comment="Magento Order Increment Id"/>
+        <column xsi:type="int" name="customer_id" padding="10" unsigned="true" nullable="true" identity="false" comment="Customer Id"/>
+        <column xsi:type="smallint" name="store_id" padding="5" unsigned="true" nullable="true" identity="false" comment="Store Id"/>
+        <column xsi:type="varchar" name="merchant_id" nullable="true" length="255" comment="Merchant Id (MID)"/>
+        <column xsi:type="varchar" name="status" nullable="false" length="32" default="active" comment="Status"/>
+        <column xsi:type="varchar" name="payment_method_type" nullable="true" length="32" comment="Payment Method Type"/>
+        <column xsi:type="timestamp" name="created_at" on_update="false" nullable="false" default="CURRENT_TIMESTAMP" comment="Created At"/>
+        <column xsi:type="timestamp" name="cancelled_at" on_update="false" nullable="true" comment="Cancelled At"/>
+
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="entity_id"/>
+        </constraint>
+        <constraint xsi:type="unique" referenceId="KUSTOM_CUSTOMER_TOKEN_KUSTOM_ORDER_ID">
+            <column name="kustom_order_id"/>
+        </constraint>
+        <constraint xsi:type="foreign" referenceId="KUSTOM_CUSTOMER_TOKEN_ORDER_ID_SALES_ORDER_ENTITY_ID" table="kustom_customer_token" column="order_id" referenceTable="sales_order" referenceColumn="entity_id" onDelete="SET NULL"/>
+        <constraint xsi:type="foreign" referenceId="KUSTOM_CUSTOMER_TOKEN_CUSTOMER_ID_CUSTOMER_ENTITY_ENTITY_ID" table="kustom_customer_token" column="customer_id" referenceTable="customer_entity" referenceColumn="entity_id" onDelete="SET NULL"/>
+        <constraint xsi:type="foreign" referenceId="KUSTOM_CUSTOMER_TOKEN_STORE_ID_STORE_STORE_ID" table="kustom_customer_token" column="store_id" referenceTable="store" referenceColumn="store_id" onDelete="SET NULL"/>
+        <index referenceId="KUSTOM_CUSTOMER_TOKEN_ORDER_ID" indexType="btree">
+            <column name="order_id"/>
+        </index>
+        <index referenceId="KUSTOM_CUSTOMER_TOKEN_INCREMENT_ID" indexType="btree">
+            <column name="increment_id"/>
+        </index>
+        <index referenceId="KUSTOM_CUSTOMER_TOKEN_CUSTOMER_ID" indexType="btree">
+            <column name="customer_id"/>
         </index>
     </table>
 </schema>

@@ -153,3 +153,8 @@ Price,Price
 "Action","Action"
 "Shipping countries and billing countries are the same","Shipping countries and billing countries are the same"
 "Billing Countries","Billing Countries"
+"A customer token for Kustom order ""%1"" already exists.","A customer token for Kustom order ""%1"" already exists."
+"The customer token could not be saved.","The customer token could not be saved."
+"The customer token does not exist.","The customer token does not exist."
+"Recurring token","Recurring token"
+"Kustom Recurring Customer Token (view)","Kustom Recurring Customer Token (view)"

@@ -6,6 +6,7 @@
             "is_active": true,
             "quote_id": true,
             "is_changed": true,
+            "is_recurring": true,
             "created_at": true,
             "updated_at": true
         },
@@ -15,6 +16,34 @@
         "constraint": {
             "PRIMARY": true,
             "KLARNA_KCO_QUOTE_QUOTE_ID_QUOTE_ENTITY_ID": true
+        }
+    },
+    "kustom_customer_token": {
+        "column": {
+            "entity_id": true,
+            "token": true,
+            "kustom_order_id": true,
+            "order_id": true,
+            "increment_id": true,
+            "customer_id": true,
+            "store_id": true,
+            "merchant_id": true,
+            "status": true,
+            "payment_method_type": true,
+            "created_at": true,
+            "cancelled_at": true
+        },
+        "index": {
+            "KUSTOM_CUSTOMER_TOKEN_ORDER_ID": true,
+            "KUSTOM_CUSTOMER_TOKEN_INCREMENT_ID": true,
+            "KUSTOM_CUSTOMER_TOKEN_CUSTOMER_ID": true
+        },
+        "constraint": {
+            "PRIMARY": true,
+            "KUSTOM_CUSTOMER_TOKEN_KUSTOM_ORDER_ID": true,
+            "KUSTOM_CUSTOMER_TOKEN_ORDER_ID_SALES_ORDER_ENTITY_ID": true,
+            "KUSTOM_CUSTOMER_TOKEN_CUSTOMER_ID_CUSTOMER_ENTITY_ENTITY_ID": true,
+            "KUSTOM_CUSTOMER_TOKEN_STORE_ID_STORE_STORE_ID": true
         }
     }
 }

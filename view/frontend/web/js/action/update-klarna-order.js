@@ -1,15 +1,17 @@
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
  */
 /*jshint browser:true jquery:true*/
 define([
+    'jquery',
     'mage/storage',
     'Klarna_Kco/js/model/iframe',
     'Klarna_Kco/js/model/config'
 ], function (
+    $,
     storage,
     iframe,
     config
@@ -27,6 +29,11 @@ define([
                 window.scrollTo(0, 'smooth');
             }
             iframe.resume();
+
+            if (response['html_snippet']) {
+                // The Kustom order was recreated, so the iframe has to be replaced.
+                $('#klarna-checkout-container').replaceWith(response['html_snippet']);
+            }
         });
     };
 });
