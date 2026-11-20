@@ -1,5 +1,16 @@
 # Changelog
 
+## 12.4.5 / 2026-11-20
+
+### Breaking changes
+* None
+
+### Features / changes
+* None
+
+### Fixes
+* KUSTOM-129: Addresses Magento cannot save are now rejected in the validate callback, so the customer can correct them before paying
+
 ## 12.4.4 / 2026-10-12
 
 ### Breaking changes
