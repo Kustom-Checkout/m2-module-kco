@@ -31,7 +31,8 @@ define([
 
         ajaxUpdateAction = true;
         iframe.suspend();
-        storage.post(config.updateKssStatusUrl).done(function (response) {
+        // KUSTOM-128: only called from iframe events, so the checkout is editable
+        storage.post(config.updateKssStatusUrl + '?origin=iframe').done(function (response) {
             if (response && response.locked && response.message) {
                 // KUSTOM-128: the change was refused, tell the customer
                 messageList.addErrorMessage({message: response.message});
