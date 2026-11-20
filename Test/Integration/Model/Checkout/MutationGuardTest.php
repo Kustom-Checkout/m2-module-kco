@@ -128,7 +128,7 @@ class MutationGuardTest extends TestCase
         $order->method('isMagentoOrderExists')->willReturn(true);
         $this->checkoutApi->expects($this->never())->method('getOrder');
 
-        foreach (['guardFrontend', 'guardKustomCallback'] as $method) {
+        foreach (['guardFrontend', 'guardKustomCallback', 'guardIframeChange'] as $method) {
             try {
                 $this->createGuard($order)->$method(self::CHECKOUT_ID);
                 $this->fail($method . ' must refuse');
@@ -220,6 +220,33 @@ class MutationGuardTest extends TestCase
 
         $this->createGuard()->guardKustomCallback(self::CHECKOUT_ID);
         $this->assertNull($this->quoteRepository->getByCheckoutId(self::CHECKOUT_ID)->getValidatedAt());
+    }
+
+    public function testIframeChangeAllowedInsideWindowAndClearsMarkerWithoutApiCall(): void
+    {
+        $this->setMarker(gmdate('Y-m-d H:i:s', time() - 10));
+        $this->checkoutApi->expects($this->never())->method('getOrder');
+
+        $this->createGuard()->guardIframeChange(self::CHECKOUT_ID);
+        $this->assertNull($this->quoteRepository->getByCheckoutId(self::CHECKOUT_ID)->getValidatedAt());
+    }
+
+    public function testIframeChangeKeepsTheLockUntilReleased(): void
+    {
+        $guard = $this->createGuard();
+        $guard->guardIframeChange(self::CHECKOUT_ID);
+        $this->assertFalse($this->otherRequestLock->acquire(self::CHECKOUT_ID, 0));
+
+        $guard->releaseAll();
+        $this->assertTrue($this->otherRequestLock->acquire(self::CHECKOUT_ID, 0));
+    }
+
+    public function testIframeChangeRefusedWhenOrderCreationHoldsTheLock(): void
+    {
+        $this->assertTrue($this->otherRequestLock->acquire(self::CHECKOUT_ID, 0));
+
+        $this->expectException(CheckoutLockedException::class);
+        $this->createGuard()->guardIframeChange(self::CHECKOUT_ID);
     }
 
     private function createGuard(?CheckoutOrder $order = null): MutationGuard

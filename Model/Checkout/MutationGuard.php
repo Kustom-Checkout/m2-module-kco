@@ -128,6 +128,35 @@ class MutationGuard
      */
     public function guardKustomCallback(string $kustomId): void
     {
+        $this->guardReopenedCheckout($kustomId);
+    }
+
+    /**
+     * Guard for changes the customer makes inside the Kustom iframe (shipping option, address)
+     *
+     * The customer can only edit inside the iframe while Kustom has the checkout editable, so such a change means
+     * the checkout is open again: same rule as for the Kustom callbacks, the 300 s window does not apply and the
+     * marker is cleared. An existing order or a running order creation still refuses. Changes made on the Magento
+     * page itself must use guardFrontend().
+     *
+     * @param string $kustomId
+     * @return void
+     * @throws CheckoutLockedException
+     */
+    public function guardIframeChange(string $kustomId): void
+    {
+        $this->guardReopenedCheckout($kustomId);
+    }
+
+    /**
+     * Refuse on order/creation, otherwise keep the lock and clear the marker (a failure is logged, not thrown)
+     *
+     * @param string $kustomId
+     * @return void
+     * @throws CheckoutLockedException
+     */
+    private function guardReopenedCheckout(string $kustomId): void
+    {
         $this->assertNoOrderAndNoCreation($kustomId);
 
         try {

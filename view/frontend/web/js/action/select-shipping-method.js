@@ -56,8 +56,25 @@ define([
         return true;
     }
 
-    return function (shippingMethod) {
+    /**
+     * KUSTOM-128: an iframe event marks the request, the server then skips the 300 s window
+     *
+     * @param {String} url
+     * @param {Boolean} fromIframe
+     * @returns {String}
+     */
+    function withOrigin(url, fromIframe) {
+        return fromIframe ? url + (url.indexOf('?') === -1 ? '?' : '&') + 'origin=iframe' : url;
+    }
+
+    /**
+     * @param {Object} shippingMethod
+     * @param {String} [origin] 'iframe' when the change comes from a Kustom iframe event
+     * @returns {Boolean}
+     */
+    return function (shippingMethod, origin) {
         var changedShippingMethod = false,
+            fromIframe = origin === 'iframe',
             previousMethod = oldShippingMethod,
             data = {
                 // jscs:disable requireCamelCaseOrUpperCaseIdentifiers
@@ -83,7 +100,7 @@ define([
         }
 
         iframe.suspend();
-        storage.post(config.updateKssStatusUrl)
+        storage.post(withOrigin(config.updateKssStatusUrl, fromIframe))
             .done(function (ajaxResult) {
                 getTotals([]);
 
@@ -95,7 +112,7 @@ define([
                 }
 
                 if (changedShippingMethod && ajaxResult['changed_grand_total']) {
-                    storage.post(config.updateKssDiscountOrderUrl)
+                    storage.post(withOrigin(config.updateKssDiscountOrderUrl, fromIframe))
                         .done(function (ajaxResultInner) {
                             iframe.resume();
 

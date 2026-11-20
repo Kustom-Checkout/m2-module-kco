@@ -20,6 +20,7 @@ use Klarna\Kco\Model\Checkout\Kco\Session;
 use Klarna\Kco\Model\Responder\Ajax;
 use Magento\Framework\App\Action\HttpPostActionInterface;
 use Magento\Framework\App\ObjectManager;
+use Magento\Framework\App\RequestInterface;
 use Magento\Framework\Controller\ResultInterface;
 use Magento\Framework\Exception\LocalizedException;
 use Klarna\Base\Controller\CsrfAbstract;
@@ -59,6 +60,10 @@ class UpdateKssStatus implements HttpPostActionInterface
      * @var MutationGuard
      */
     private MutationGuard $mutationGuard;
+    /**
+     * @var RequestInterface
+     */
+    private RequestInterface $request;
 
     /**
      * @param LoggerInterface $logger
@@ -68,6 +73,7 @@ class UpdateKssStatus implements HttpPostActionInterface
      * @param KlarnaRequestQuoteTransformer $klarnaRequestQuoteTransformer
      * @param KssConfigProvider $kssConfigProvider
      * @param MutationGuard|null $mutationGuard
+     * @param RequestInterface|null $request
      * @codeCoverageIgnore
      */
     public function __construct(
@@ -77,7 +83,8 @@ class UpdateKssStatus implements HttpPostActionInterface
         Ajax $ajax,
         KlarnaRequestQuoteTransformer $klarnaRequestQuoteTransformer,
         KssConfigProvider $kssConfigProvider,
-        ?MutationGuard $mutationGuard = null
+        ?MutationGuard $mutationGuard = null,
+        ?RequestInterface $request = null
     ) {
         $this->logger = $logger;
         $this->initializer = $initializer;
@@ -86,6 +93,7 @@ class UpdateKssStatus implements HttpPostActionInterface
         $this->klarnaRequestQuoteTransformer = $klarnaRequestQuoteTransformer;
         $this->kssConfigProvider = $kssConfigProvider;
         $this->mutationGuard = $mutationGuard ?: ObjectManager::getInstance()->get(MutationGuard::class);
+        $this->request = $request ?: ObjectManager::getInstance()->get(RequestInterface::class);
     }
 
     /**
@@ -121,7 +129,12 @@ class UpdateKssStatus implements HttpPostActionInterface
         $kustomId = (string) $this->session->getKlarnaQuote()->getKlarnaCheckoutId();
         if ($kustomId !== '') {
             try {
-                $this->mutationGuard->guardFrontend($kustomId);
+                if ($this->request->getParam('origin') === 'iframe') {
+                    // KUSTOM-128: the customer changed it inside the iframe, so the checkout is editable
+                    $this->mutationGuard->guardIframeChange($kustomId);
+                } else {
+                    $this->mutationGuard->guardFrontend($kustomId);
+                }
             } catch (CheckoutLockedException $e) {
                 // KUSTOM-128: payment in progress or order created, the quote stays untouched
                 return $this->ajax->getSummaryResponse(

@@ -10,11 +10,14 @@ declare(strict_types=1);
 namespace Klarna\Kco\Test\Integration\Controller\Api;
 
 use Klarna\Kco\Model\Api\Rest\Service\Checkout;
+use Klarna\Kco\Api\QuoteRepositoryInterface;
 use Klarna\Kco\Model\Checkout\ValidatedMarker;
+use Klarna\Kco\Model\Order\Order as CheckoutOrder;
 use Magento\Checkout\Model\Session as CheckoutSession;
 use Magento\Framework\App\Request\Http;
 use Magento\TestFramework\Quote\Model\GetQuoteByReservedOrderId;
 use Magento\TestFramework\TestCase\AbstractController;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * KUSTOM-128: the KSS status/discount updates are refused between validate and order creation
@@ -51,10 +54,69 @@ class UpdateKssTest extends AbstractController
     }
 
     /**
-     * @param string $uri
+     * An iframe-originated request inside the window is allowed and clears the marker
+     *
+     * @dataProvider kssUriProvider
+     * @magentoAppArea frontend
+     * @magentoAppIsolation enabled
+     * @magentoDbIsolation enabled
+     * @magentoConfigFixture current_store payment/klarna_kco/active 1
+     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/quote_setup1_single_simple_product.php
+     */
+    #[DataProvider('kssUriProvider')]
+    public function testIframeOriginAllowedInsideWindow(string $uri): void
+    {
+        $this->prepare();
+        $this->getRequest()->setParam('origin', 'iframe');
+        $this->dispatch($uri);
+
+        $body = json_decode($this->getResponse()->getBody(), true);
+        $this->assertFalse($body['locked'] ?? false);
+        $this->assertNull(
+            $this->_objectManager->get(QuoteRepositoryInterface::class)
+                ->getByCheckoutId(self::KLARNA_ORDER_ID)->getValidatedAt()
+        );
+    }
+
+    /**
+     * @dataProvider kssUriProvider
+     * @magentoAppArea frontend
+     * @magentoAppIsolation enabled
+     * @magentoDbIsolation enabled
+     * @magentoConfigFixture current_store payment/klarna_kco/active 1
+     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/quote_setup1_single_simple_product.php
+     */
+    #[DataProvider('kssUriProvider')]
+    public function testIframeOriginRefusedWhenOrderExists(string $uri): void
+    {
+        $orderMock = $this->createMock(CheckoutOrder::class);
+        $orderMock->method('isMagentoOrderExists')->willReturn(true);
+        $this->_objectManager->addSharedInstance($orderMock, CheckoutOrder::class);
+        $this->prepare();
+        $this->getRequest()->setParam('origin', 'iframe');
+        $this->dispatch($uri);
+
+        $body = json_decode($this->getResponse()->getBody(), true);
+        $this->assertTrue($body['locked'] ?? false);
+    }
+
+    /**
+     * @return array
+     */
+    public static function kssUriProvider(): array
+    {
+        return [
+            'status' => ['kco/api/updateKssStatus'],
+            'discount order' => ['kco/api/updateKssDiscountOrder'],
+        ];
+    }
+
+    /**
+     * Marker inside the window, session quote, POST
+     *
      * @return void
      */
-    private function assertRefused(string $uri): void
+    private function prepare(): void
     {
         $checkoutMock = $this->createMock(Checkout::class);
         $checkoutMock->expects($this->never())->method($this->anything());
@@ -66,6 +128,15 @@ class UpdateKssTest extends AbstractController
         $this->_objectManager->get(CheckoutSession::class)->replaceQuote($quote);
 
         $this->getRequest()->setMethod(Http::METHOD_POST);
+    }
+
+    /**
+     * @param string $uri
+     * @return void
+     */
+    private function assertRefused(string $uri): void
+    {
+        $this->prepare();
         $this->dispatch($uri);
 
         $body = json_decode($this->getResponse()->getBody(), true);

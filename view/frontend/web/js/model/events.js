@@ -43,7 +43,7 @@ define([
                                 method_code: dataArray.slice(1).join('_')
                             };
 
-                        kcoShippingMethod(method);
+                        kcoShippingMethod(method, 'iframe');
                     },
 
                     /**

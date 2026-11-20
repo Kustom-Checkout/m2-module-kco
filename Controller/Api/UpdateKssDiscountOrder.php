@@ -19,6 +19,7 @@ use Klarna\Kco\Model\Checkout\Kco\Session;
 use Klarna\Kco\Model\Responder\Ajax;
 use Magento\Framework\App\Action\HttpPostActionInterface;
 use Magento\Framework\App\ObjectManager;
+use Magento\Framework\App\RequestInterface;
 use Magento\Framework\Controller\ResultInterface;
 use Magento\Framework\Exception\LocalizedException;
 use Klarna\Base\Controller\CsrfAbstract;
@@ -53,14 +54,19 @@ class UpdateKssDiscountOrder implements HttpPostActionInterface
      * @var MutationGuard
      */
     private MutationGuard $mutationGuard;
+    /**
+     * @var RequestInterface
+     */
+    private RequestInterface $request;
 
     /**
-     * @param LoggerInterface    $logger
-     * @param Initializer        $initializer
-     * @param Session            $session
-     * @param Ajax               $ajax
-     * @param SalesRule          $salesRule
-     * @param MutationGuard|null $mutationGuard
+     * @param LoggerInterface       $logger
+     * @param Initializer           $initializer
+     * @param Session               $session
+     * @param Ajax                  $ajax
+     * @param SalesRule             $salesRule
+     * @param MutationGuard|null    $mutationGuard
+     * @param RequestInterface|null $request
      * @codeCoverageIgnore
      */
     public function __construct(
@@ -69,7 +75,8 @@ class UpdateKssDiscountOrder implements HttpPostActionInterface
         Session $session,
         Ajax $ajax,
         SalesRule $salesRule,
-        ?MutationGuard $mutationGuard = null
+        ?MutationGuard $mutationGuard = null,
+        ?RequestInterface $request = null
     ) {
         $this->logger      = $logger;
         $this->initializer = $initializer;
@@ -77,6 +84,7 @@ class UpdateKssDiscountOrder implements HttpPostActionInterface
         $this->ajax        = $ajax;
         $this->salesRule   = $salesRule;
         $this->mutationGuard = $mutationGuard ?: ObjectManager::getInstance()->get(MutationGuard::class);
+        $this->request = $request ?: ObjectManager::getInstance()->get(RequestInterface::class);
     }
     /**
      * Performing the update
@@ -107,7 +115,12 @@ class UpdateKssDiscountOrder implements HttpPostActionInterface
         $kustomId = (string) $this->session->getKlarnaQuote()->getKlarnaCheckoutId();
         if ($kustomId !== '') {
             try {
-                $this->mutationGuard->guardFrontend($kustomId);
+                if ($this->request->getParam('origin') === 'iframe') {
+                    // KUSTOM-128: the customer changed it inside the iframe, so the checkout is editable
+                    $this->mutationGuard->guardIframeChange($kustomId);
+                } else {
+                    $this->mutationGuard->guardFrontend($kustomId);
+                }
             } catch (CheckoutLockedException $e) {
                 // KUSTOM-128: payment in progress or order created, the quote stays untouched
                 return $this->ajax->getSummaryResponse(
