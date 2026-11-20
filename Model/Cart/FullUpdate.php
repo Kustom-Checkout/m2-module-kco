@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -23,6 +23,11 @@ use Magento\Framework\DataObject;
  */
 class FullUpdate
 {
+    /**
+     * Kustom order statuses (lowercase) after which the order is read-only, same set as in Order::validate
+     */
+    private const COMPLETED_STATUSES = ['checkout_complete', 'created'];
+
     /**
      * @var Customer
      */
@@ -92,13 +97,25 @@ class FullUpdate
             return $quote;
         }
 
-        $this->payment->addToQuote($quote);
+        // Decided before addToQuote: importing the payment collects totals, which would delete the stored rates.
+        $reuseStoredRate = $this->isKustomOrderCompleted($klarnaRequest)
+            && $this->hasStoredRateForSelectedMethod($quote);
+        if ($reuseStoredRate) {
+            $quote->getShippingAddress()->setCollectShippingRates(false);
+        }
+        $this->payment->addToQuote($quote, !$reuseStoredRate);
         $this->companyIdUpdate->updateCustomerBusinessIdFromRequest($klarnaRequest, $quote);
         $this->handler->setBillingAddressDataFromRequest($klarnaRequest, $quote);
         $this->handler->setShippingAddressDataFromRequest($klarnaRequest, $quote);
         $this->customer->setCustomerDataFromRequest($klarnaRequest, $quote);
 
-        $this->selectionAssurance->ensureShippingMethodSelectedWithPreCollect($quote);
+        if ($reuseStoredRate) {
+            // The order was already validated and paid: reuse the rate stored at validate, don't ask carriers again.
+            $quote->getShippingAddress()->setCollectShippingRates(false);
+            $this->selectionAssurance->ensureShippingMethodSelected($quote);
+        } else {
+            $this->selectionAssurance->ensureShippingMethodSelectedWithPreCollect($quote);
+        }
 
         if (!$quote->getReservedOrderId()) {
             $quote->reserveOrderId();
@@ -108,6 +125,56 @@ class FullUpdate
         $quote->collectTotals();
         $this->cartRepository->save($quote);
 
+        if ($reuseStoredRate) {
+            // Saving the quote runs core ShippingAddressManagement::assign(), which persists
+            // collect_shipping_rates = 1; placing the order would then re-collect live rates. Reset it in the DB.
+            $address = $quote->getShippingAddress();
+            $address->setCollectShippingRates(false);
+            $address->save();
+        }
+
         return $quote;
+    }
+
+    /**
+     * Returns true if Kustom reports the order as completed (compared case-insensitively)
+     *
+     * @param DataObject $klarnaRequest
+     * @return bool
+     */
+    private function isKustomOrderCompleted(DataObject $klarnaRequest): bool
+    {
+        $status = $klarnaRequest->getStatus();
+        if (!is_string($status)) {
+            return false;
+        }
+
+        return in_array(strtolower($status), self::COMPLETED_STATUSES, true);
+    }
+
+    /**
+     * Checks whether a stored rate exists for the selected shipping method
+     *
+     * True if the quote needs shipping and the shipping address holds a non-deleted stored rate
+     * for its selected shipping method.
+     *
+     * @param CartInterface $quote
+     * @return bool
+     */
+    private function hasStoredRateForSelectedMethod(CartInterface $quote): bool
+    {
+        if ($quote->isVirtual()) {
+            return false;
+        }
+
+        $address = $quote->getShippingAddress();
+        $method = $address->getShippingMethod();
+        if (!$method) {
+            return false;
+        }
+
+        $rate = $address->getShippingRateByCode($method);
+
+        return $rate && !$rate->isDeleted();
     }
 }
