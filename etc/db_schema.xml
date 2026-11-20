@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <!--
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -17,6 +17,8 @@
         <column xsi:type="smallint" name="is_changed" padding="6" unsigned="false" nullable="false" identity="false" default="0" comment="Is Changed"/>
         <column name="created_at" xsi:type="timestamp" on_update="false" nullable="false" default="CURRENT_TIMESTAMP" comment="Created At"/>
         <column name="updated_at" xsi:type="timestamp" on_update="true" nullable="false" default="CURRENT_TIMESTAMP" comment="Updated At"/>
+        <column name="validated_at" xsi:type="datetime" nullable="true"
+                comment="Validated At (UTC), set by a successful validate callback"/>
 
         <constraint xsi:type="primary" referenceId="PRIMARY">
             <column name="kco_quote_id"/>

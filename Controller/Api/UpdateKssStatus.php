@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -9,6 +9,8 @@ declare(strict_types=1);
 
 namespace Klarna\Kco\Controller\Api;
 
+use Klarna\Kco\Exception\CheckoutLockedException;
+use Klarna\Kco\Model\Checkout\MutationGuard;
 use Klarna\Kco\Model\Cart\ShippingMethod\KlarnaRequestQuoteTransformer;
 use Klarna\Kss\Model\KssConfigProvider;
 use Klarna\Logger\Api\LoggerInterface;
@@ -17,6 +19,8 @@ use Klarna\Kco\Model\Checkout\Kco\Initializer;
 use Klarna\Kco\Model\Checkout\Kco\Session;
 use Klarna\Kco\Model\Responder\Ajax;
 use Magento\Framework\App\Action\HttpPostActionInterface;
+use Magento\Framework\App\ObjectManager;
+use Magento\Framework\App\RequestInterface;
 use Magento\Framework\Controller\ResultInterface;
 use Magento\Framework\Exception\LocalizedException;
 use Klarna\Base\Controller\CsrfAbstract;
@@ -52,6 +56,14 @@ class UpdateKssStatus implements HttpPostActionInterface
      * @var KssConfigProvider
      */
     private KssConfigProvider $kssConfigProvider;
+    /**
+     * @var MutationGuard
+     */
+    private MutationGuard $mutationGuard;
+    /**
+     * @var RequestInterface
+     */
+    private RequestInterface $request;
 
     /**
      * @param LoggerInterface $logger
@@ -60,6 +72,8 @@ class UpdateKssStatus implements HttpPostActionInterface
      * @param Ajax $ajax
      * @param KlarnaRequestQuoteTransformer $klarnaRequestQuoteTransformer
      * @param KssConfigProvider $kssConfigProvider
+     * @param MutationGuard|null $mutationGuard
+     * @param RequestInterface|null $request
      * @codeCoverageIgnore
      */
     public function __construct(
@@ -68,7 +82,9 @@ class UpdateKssStatus implements HttpPostActionInterface
         Session $session,
         Ajax $ajax,
         KlarnaRequestQuoteTransformer $klarnaRequestQuoteTransformer,
-        KssConfigProvider $kssConfigProvider
+        KssConfigProvider $kssConfigProvider,
+        ?MutationGuard $mutationGuard = null,
+        ?RequestInterface $request = null
     ) {
         $this->logger = $logger;
         $this->initializer = $initializer;
@@ -76,6 +92,8 @@ class UpdateKssStatus implements HttpPostActionInterface
         $this->ajax = $ajax;
         $this->klarnaRequestQuoteTransformer = $klarnaRequestQuoteTransformer;
         $this->kssConfigProvider = $kssConfigProvider;
+        $this->mutationGuard = $mutationGuard ?: ObjectManager::getInstance()->get(MutationGuard::class);
+        $this->request = $request ?: ObjectManager::getInstance()->get(RequestInterface::class);
     }
 
     /**
@@ -91,7 +109,39 @@ class UpdateKssStatus implements HttpPostActionInterface
      */
     public function execute()
     {
+        try {
+            return $this->executeGuarded();
+        } finally {
+            // KUSTOM-128: the guard keeps the order creation lock until here
+            $this->mutationGuard->releaseAll();
+        }
+    }
+
+    /**
+     * Run the action
+     *
+     * @return mixed
+     */
+    private function executeGuarded()
+    {
         $this->logger->info('UpdateKssStatus: Start');
+
+        $kustomId = (string) $this->session->getKlarnaQuote()->getKlarnaCheckoutId();
+        if ($kustomId !== '') {
+            try {
+                if ($this->request->getParam('origin') === 'iframe') {
+                    // KUSTOM-128: the customer changed it inside the iframe, so the checkout is editable
+                    $this->mutationGuard->guardIframeChange($kustomId);
+                } else {
+                    $this->mutationGuard->guardFrontend($kustomId);
+                }
+            } catch (CheckoutLockedException $e) {
+                // KUSTOM-128: payment in progress or order created, the quote stays untouched
+                return $this->ajax->getSummaryResponse(
+                    ['error' => true, 'locked' => true, 'message' => $e->getMessage()]
+                );
+            }
+        }
 
         $store = $this->session->getQuote()->getStore();
         $isKssEnabled = $this->kssConfigProvider->isKssEnabled($store);

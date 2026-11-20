@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -9,11 +9,14 @@ declare(strict_types=1);
 
 namespace Klarna\Kco\Controller\Klarna;
 
+use Klarna\Kco\Exception\CheckoutLockedException;
+use Klarna\Kco\Model\Checkout\MutationGuard;
 use Klarna\Base\Model\Quote\ShippingMethod\QuoteMethodHandler as QuoteShippingMethod;
 use Klarna\Logger\Api\LoggerInterface;
 use Klarna\Kco\Model\Checkout\Kco\Initializer as kcoInitializer;
 use Klarna\Kco\Model\Responder\Ajax;
 use Magento\Framework\App\Action\HttpPostActionInterface;
+use Magento\Framework\App\ObjectManager;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Controller\ResultInterface;
 use Magento\Framework\App\RequestInterface;
@@ -51,6 +54,10 @@ class SaveShippingMethod implements HttpPostActionInterface
      * @var ManagerInterface
      */
     private ManagerInterface $messageManager;
+    /**
+     * @var MutationGuard
+     */
+    private MutationGuard $mutationGuard;
 
     /**
      * @param LoggerInterface $logger
@@ -59,6 +66,7 @@ class SaveShippingMethod implements HttpPostActionInterface
      * @param QuoteShippingMethod $quoteShippingMethod
      * @param RequestInterface $request
      * @param ManagerInterface $messageManager
+     * @param MutationGuard|null $mutationGuard
      * @codeCoverageIgnore
      */
     public function __construct(
@@ -67,7 +75,8 @@ class SaveShippingMethod implements HttpPostActionInterface
         Ajax $ajax,
         QuoteShippingMethod $quoteShippingMethod,
         RequestInterface $request,
-        ManagerInterface $messageManager
+        ManagerInterface $messageManager,
+        ?MutationGuard $mutationGuard = null
     ) {
         $this->logger              = $logger;
         $this->kcoInitializer      = $kcoInitializer;
@@ -75,6 +84,7 @@ class SaveShippingMethod implements HttpPostActionInterface
         $this->quoteShippingMethod = $quoteShippingMethod;
         $this->request = $request;
         $this->messageManager = $messageManager;
+        $this->mutationGuard = $mutationGuard ?: ObjectManager::getInstance()->get(MutationGuard::class);
     }
 
     /**
@@ -85,6 +95,25 @@ class SaveShippingMethod implements HttpPostActionInterface
     public function execute()
     {
         try {
+            return $this->executeGuarded();
+        } finally {
+            // KUSTOM-128: the guard keeps the order creation lock until here
+            $this->mutationGuard->releaseAll();
+        }
+    }
+
+    /**
+     * Run the action
+     *
+     * @return mixed
+     */
+    private function executeGuarded()
+    {
+        try {
+            $kustomId = (string) $this->kcoInitializer->getKcoSession()->getKlarnaQuote()->getKlarnaCheckoutId();
+            if ($kustomId !== '') {
+                $this->mutationGuard->guardFrontend($kustomId);
+            }
             $body = json_decode($this->request->getContent(), true);
 
             $this->quoteShippingMethod->updateShippingMethod(
@@ -92,6 +121,11 @@ class SaveShippingMethod implements HttpPostActionInterface
                 $body['carrier_code'] . '_' . $body['method_code']
             );
 
+        } catch (CheckoutLockedException $e) {
+            // KUSTOM-128: payment in progress or order created, the quote stays untouched
+            return $this->ajax->getSummaryResponse(
+                ['error' => true, 'locked' => true, 'message' => $e->getMessage()]
+            );
         } catch (LocalizedException $e) {
             $this->logger->critical($e);
             $this->messageManager->addErrorMessage(__(

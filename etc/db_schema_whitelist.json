@@ -7,7 +7,8 @@
             "quote_id": true,
             "is_changed": true,
             "created_at": true,
-            "updated_at": true
+            "updated_at": true,
+            "validated_at": true
         },
         "index": {
             "KLARNA_KCO_QUOTE_KLARNA_CHECKOUT_ID": true
