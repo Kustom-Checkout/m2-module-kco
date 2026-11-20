@@ -14,13 +14,19 @@ namespace Klarna\Kco\Test\Integration\Controller\Api;
 use Klarna\Backend\Model\Api\Rest\Service\Ordermanagement;
 use Klarna\Base\Model\OrderFactory as KlarnaOrderFactory;
 use Klarna\Kco\Model\Api\Rest\Service\Checkout;
+use Klarna\Kco\Model\Cart\Validations\Handler as ValidationHandler;
 use Klarna\Kco\Model\Order\CreationLock;
+use Magento\Framework\App\Config\MutableScopeConfigInterface;
 use Magento\Framework\App\Request\Http;
+use Magento\Framework\DataObject;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Lock\LockManagerInterface;
+use Magento\Quote\Api\CartRepositoryInterface;
 use Magento\Quote\Model\CartMutex;
 use Magento\Quote\Model\QuoteManagement;
 use Magento\Sales\Model\OrderFactory as MagentoOrderFactory;
+use Magento\Store\Model\ScopeInterface;
+use Magento\TestFramework\Quote\Model\GetQuoteByReservedOrderId;
 use Magento\TestFramework\TestCase\AbstractController;
 use PHPUnit\Framework\MockObject\MockObject;
 
@@ -282,6 +288,121 @@ class PushTest extends AbstractController
                 'state' => 'processing',
                 'status' => 'processing',
                 'increment_id' => '100000001',
+            ],
+            [
+                'additional_information' => [
+                    'method_title' => 'Kustom Checkout',
+                    'klarna_reference' => '12345',
+                ],
+            ]
+        );
+    }
+
+    /**
+     * @magentoAppIsolation enabled
+     * @magentoDbIsolation enabled
+     * @magentoConfigFixture current_store payment/klarna_kco/active 1
+     * @magentoConfigFixture current_store carriers/flatrate/price 5
+     * @magentoConfigFixture current_store general/region/state_required ''
+     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/quote_setup1_single_simple_product.php
+     */
+    public function testExecuteShouldCreateOrderWithShippingRateStoredAtValidateWhenCarrierPriceChanged(): void
+    {
+        $expectedResponse = '[]';
+        $klarnaOrderId = '123456-1234-1234-1234-1234567890';
+
+        // KUSTOM-127: validate callback at flatrate 5, then the carrier price changes to 10 before the push
+        $quote = $this->_objectManager->create(GetQuoteByReservedOrderId::class)->execute('100000001');
+        $this->_objectManager->create(ValidationHandler::class)
+            ->validateRequestObject($this->buildValidateRequest($klarnaOrderId), $quote);
+        $this->_objectManager->get(CartRepositoryInterface::class)->save($quote);
+        $this->_objectManager->get(MutableScopeConfigInterface::class)
+            ->setValue('carriers/flatrate/price', 10, ScopeInterface::SCOPE_STORE);
+
+        $this->assertOrderData(
+            $klarnaOrderId,
+            [],
+            [],
+            []
+        );
+
+        $this->checkoutMock->expects($this->any())->method('getOrder')
+            ->willReturn([
+                'billing_address' => [
+                    'city' => 'City',
+                    'country' => 'US',
+                    'email' => 'customer@example.com',
+                    'family_name' => 'Lastname',
+                    'given_name' => 'Firstname',
+                    'phone' => '040123456',
+                    'postal_code' => '12345',
+                    'street_address' => 'Street',
+                    'region' => 'California',
+                ],
+                'shipping_address' => [
+                    'city' => 'City',
+                    'country' => 'US',
+                    'email' => 'customer@example.com',
+                    'family_name' => 'Lastname',
+                    'given_name' => 'Firstname',
+                    'phone' => '040123456',
+                    'postal_code' => '12345',
+                    'street_address' => 'Street',
+                    'region' => 'California',
+                ],
+                'order_id' => $klarnaOrderId,
+                'is_successful' => true,
+                'order_lines' => [
+                    [
+                        'image_url' => '',
+                        'name' => 'Simple Product',
+                        'product_url' => 'http://localhost/index.php/simple-product.html',
+                        'quantity' => 1,
+                        'reference' => 'simple',
+                        'tax_rate' => 0,
+                        'total_amount' => 1000,
+                        'total_discount_amount' => 0,
+                        'total_tax_amount' => 0,
+                        'type' => 'physical',
+                        'unit_price' => 1000,
+                    ]
+                ],
+                'selected_shipping_option' => [
+                    'id' => 'flatrate_flatrate',
+                    'price' => 500,
+                    'tax_amount' => 0,
+                    'tax_rate' => 0,
+                ],
+                'order_amount' => 1500,
+                'status' => 'checkout_complete',
+            ]);
+
+        $this->orderManagementMock->expects($this->any())->method('getOrder')
+            ->willReturn([
+                'order_id' => $klarnaOrderId,
+                'klarna_reference' => '12345',
+            ]);
+        $this->orderManagementMock->expects($this->any())->method('updateMerchantReferences')
+            ->willReturn([]);
+        $this->orderManagementMock->expects($this->any())->method('acknowledgeOrder')
+            ->willReturn(['is_successful' => true]);
+
+        $this->getRequest()->setMethod(Http::METHOD_POST);
+        $this->dispatch('kco/api/push/id/' . $klarnaOrderId);
+        $this->assertEquals($expectedResponse, $this->getResponse()->getBody());
+
+        $this->assertOrderData(
+            $klarnaOrderId,
+            [
+                'klarna_order_id' => $klarnaOrderId,
+                'is_acknowledged' => '1',
+            ],
+            [
+                'state' => 'processing',
+                'status' => 'processing',
+                'increment_id' => '100000001',
+                'shipping_amount' => 5,
+                'grand_total' => 15,
             ],
             [
                 'additional_information' => [
@@ -598,6 +719,52 @@ class PushTest extends AbstractController
             $this->_objectManager->create(CreationLock::class, ['lockManager' => $lockManagerMock]),
             CreationLock::class
         );
+    }
+
+    /**
+     * @param string $klarnaOrderId
+     * @return DataObject
+     */
+    private function buildValidateRequest(string $klarnaOrderId): DataObject
+    {
+        $address = [
+            'city' => 'City',
+            'country' => 'US',
+            'email' => 'customer@example.com',
+            'family_name' => 'Lastname',
+            'given_name' => 'Firstname',
+            'phone' => '040123456',
+            'postal_code' => '12345',
+            'street_address' => 'Street',
+            'region' => 'California',
+        ];
+
+        return new DataObject([
+            'order_id' => $klarnaOrderId,
+            'status' => 'checkout_incomplete',
+            'billing_address' => $address,
+            'shipping_address' => $address,
+            'order_lines' => [[
+                'image_url' => '',
+                'name' => 'Simple Product',
+                'product_url' => 'http://localhost/index.php/simple-product.html',
+                'quantity' => 1,
+                'reference' => 'simple',
+                'tax_rate' => 0,
+                'total_amount' => 1000,
+                'total_discount_amount' => 0,
+                'total_tax_amount' => 0,
+                'type' => 'physical',
+                'unit_price' => 1000,
+            ]],
+            'selected_shipping_option' => [
+                'id' => 'flatrate_flatrate',
+                'price' => 500,
+                'tax_amount' => 0,
+                'tax_rate' => 0,
+            ],
+            'order_amount' => 1500,
+        ]);
     }
 
     /**

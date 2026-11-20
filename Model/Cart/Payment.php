@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -22,14 +22,17 @@ class Payment
      * Add payment specific information to the quote
      *
      * @param CartInterface $quote
+     * @param bool $collectShippingRates False keeps the stored shipping rates (no re-collection on import)
      */
-    public function addToQuote(CartInterface $quote): void
+    public function addToQuote(CartInterface $quote, bool $collectShippingRates = true): void
     {
         if ($quote->isVirtual()) {
             $address = $quote->getBillingAddress();
         } else {
             $address = $quote->getShippingAddress();
-            $quote->getShippingAddress()->setCollectShippingRates(true);
+            if ($collectShippingRates) {
+                $address->setCollectShippingRates(true);
+            }
         }
 
         $data = ['method' => Kco::METHOD_CODE];
