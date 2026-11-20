@@ -1,5 +1,27 @@
 # Changelog
 
+## 12.4.7 / 2026-11-20
+
+### Breaking changes
+* None
+
+### Features / changes
+* None
+
+### Fixes
+* KUSTOM-128: Quote changes are refused after a successful validate (5 minute block) and while the order is being created or exists
+
+## 12.4.6 / 2026-11-20
+
+### Breaking changes
+* None
+
+### Features / changes
+* None
+
+### Fixes
+* KUSTOM-127: Push and confirmation reuse the shipping rate accepted in the validate callback instead of collecting carrier rates again after payment
+
 ## 12.4.5 / 2026-11-20
 
 ### Breaking changes

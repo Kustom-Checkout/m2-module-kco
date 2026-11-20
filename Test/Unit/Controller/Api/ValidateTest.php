@@ -11,6 +11,7 @@ namespace Klarna\Kco\Test\Unit\Controller\Api;
 
 use Klarna\Base\Exception as KlarnaException;
 use Klarna\Base\Model\Responder\Result;
+use Klarna\Kco\Model\Checkout\ValidatedMarker;
 use Klarna\Kco\Controller\Api\Validate;
 use Klarna\Kco\Exception\AddressValidationException;
 use Klarna\Kco\Model\Cart\Validations\Handler;
@@ -57,6 +58,10 @@ class ValidateTest extends TestCase
      * @var Logger|MockObject
      */
     private $apiLogger;
+    /**
+     * @var ValidatedMarker|MockObject
+     */
+    private $validatedMarker;
 
     protected function setUp(): void
     {
@@ -65,6 +70,7 @@ class ValidateTest extends TestCase
         $this->redirectFactory = $this->createMock(RedirectFactory::class);
         $this->logger = $this->createMock(LoggerInterface::class);
         $this->apiLogger = $this->createMock(Logger::class);
+        $this->validatedMarker = $this->createMock(ValidatedMarker::class);
         $request = $this->createMock(RequestInterface::class);
         $request->method('getParam')->willReturn('checkout-id-1');
         $klarna = $this->createMock(Klarna::class);
@@ -80,7 +86,8 @@ class ValidateTest extends TestCase
             $this->createMock(Container::class),
             $request,
             $this->createMock(ManagerInterface::class),
-            $this->redirectFactory
+            $this->redirectFactory,
+            $this->validatedMarker
         );
     }
 
@@ -130,5 +137,41 @@ class ValidateTest extends TestCase
         $this->result->expects(static::once())->method('getJsonResult')->with(200)->willReturn($json);
 
         static::assertSame($json, $this->controller->execute());
+    }
+
+    /**
+     * @covers ::execute
+     */
+    public function testExecuteStillAnswers200WhenMarkerCannotBeSaved(): void
+    {
+        $this->validatedMarker->method('update')->willThrowException(new \RuntimeException('db down'));
+        $json = $this->createMock(Json::class);
+        $this->result->method('getJsonResult')->with(200)->willReturn($json);
+        $this->logger->expects(static::atLeastOnce())->method('warning');
+
+        static::assertSame($json, $this->controller->execute());
+    }
+
+    /**
+     * @covers ::execute
+     */
+    public function testExecuteSetsMarkerOnSuccessAndClearsItOnAddressError(): void
+    {
+        $values = [];
+        $this->validatedMarker->expects(static::exactly(2))->method('update')->willReturnCallback(
+            function (string $id, ?string $value) use (&$values) {
+                static::assertSame('checkout-id-1', $id);
+                $values[] = $value;
+            }
+        );
+        $this->result->method('getJsonResult')->willReturn($this->createMock(Json::class));
+
+        $this->controller->execute();
+        $this->handler->method('validateRequestObject')
+            ->willThrowException(new AddressValidationException(__('We could not use this address.')));
+        $this->controller->execute();
+
+        static::assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', (string) $values[0]);
+        static::assertNull($values[1]);
     }
 }

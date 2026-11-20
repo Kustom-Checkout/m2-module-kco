@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -57,7 +57,22 @@ class CacheQuoteRepository implements QuoteRepositoryInterface
      */
     public function save(QuoteInterface $quote)
     {
-        return $this->quoteRepository->save($quote);
+        $result = $this->quoteRepository->save($quote);
+        // Never serve a stale instance (e.g. validated_at) after a save
+        unset($this->instancesByKlarnaCheckoutId[$quote->getKlarnaCheckoutId()]);
+
+        return $result;
+    }
+
+    /**
+     * Drop the cached instance of a checkout id
+     *
+     * @param string $checkoutId
+     * @return void
+     */
+    public function invalidate(string $checkoutId): void
+    {
+        unset($this->instancesByKlarnaCheckoutId[$checkoutId]);
     }
 
     /**
