@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -11,9 +11,18 @@ declare(strict_types=1);
 
 namespace Klarna\Kco\Test\Integration\Controller\Api;
 
+use Klarna\Kco\Api\QuoteRepositoryInterface;
+use Klarna\Kco\Model\Checkout\ValidatedMarker;
 use Klarna\Kco\Model\Api\Rest\Service\Checkout as CheckoutApi;
+use Klarna\Kco\Model\Order\CreationLock;
+use Klarna\Kco\Model\Order\Order as CheckoutOrder;
 use Magento\Checkout\Model\Session as CheckoutSession;
+use Magento\Framework\App\DeploymentConfig;
 use Magento\Framework\App\Request\Http;
+use Magento\Framework\App\ResourceConnection;
+use Magento\Framework\Lock\Backend\Database;
+use Magento\Quote\Model\QuoteFactory;
+use Magento\Quote\Model\ResourceModel\Quote as QuoteResource;
 use Magento\TestFramework\Quote\Model\GetQuoteByReservedOrderId;
 use Magento\TestFramework\TestCase\AbstractController;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -172,5 +181,163 @@ class ShippingMethodUpdateTest extends AbstractController
         $this->dispatch('kco/api/shippingMethodUpdate/id/' . $klarnaOrderId);
         $body = json_decode($this->getResponse()->getBody(), true);
         $this->assertEquals($expectedShippingOptions, $body['shipping_options'] ?? []);
+    }
+
+    /**
+     * KUSTOM-128: Kustom reopened the checkout, so the callback is applied and the validated marker is cleared
+     *
+     * @magentoAppArea frontend
+     * @magentoAppIsolation enabled
+     * @magentoDbIsolation enabled
+     * @magentoConfigFixture current_store payment/klarna_kco/active 1
+     * @magentoConfigFixture current_store payment/klarna_kss/enabled 0
+     * @magentoConfigFixture current_store klarna/api/debug 1
+     * @magentoConfigFixture current_store general/region/state_required ''
+     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/quote_setup1_single_simple_product.php
+     */
+    public function testMarkerIsClearedAndCallbackStillApplied(): void
+    {
+        $klarnaOrderId = '123456-1234-1234-1234-1234567890';
+        $repository = $this->_objectManager->get(QuoteRepositoryInterface::class);
+        $this->_objectManager->get(ValidatedMarker::class)->update($klarnaOrderId, gmdate('Y-m-d H:i:s'));
+
+        $this->checkoutSession->replaceQuote($this->quoteGetter->execute('100000001'));
+        $this->dispatchShippingMethodUpdate($klarnaOrderId);
+
+        $body = json_decode($this->getResponse()->getBody(), true);
+        $this->assertEquals(200, $this->getResponse()->getHttpResponseCode());
+        $this->assertNotEmpty($body['shipping_options'] ?? []);
+        $this->assertNull($repository->getByCheckoutId($klarnaOrderId)->getValidatedAt());
+    }
+
+    /**
+     * KUSTOM-128: the Magento order exists, so the quote must not change
+     *
+     * @magentoAppArea frontend
+     * @magentoAppIsolation enabled
+     * @magentoDbIsolation enabled
+     * @magentoConfigFixture current_store payment/klarna_kco/active 1
+     * @magentoConfigFixture current_store payment/klarna_kss/enabled 0
+     * @magentoConfigFixture current_store klarna/api/debug 1
+     * @magentoConfigFixture current_store general/region/state_required ''
+     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/quote_setup1_single_simple_product.php
+     */
+    public function testQuoteUnchangedWhenMagentoOrderExists(): void
+    {
+        $klarnaOrderId = '123456-1234-1234-1234-1234567890';
+        $orderMock = $this->createMock(CheckoutOrder::class);
+        $orderMock->method('isMagentoOrderExists')->willReturn(true);
+        $this->_objectManager->addSharedInstance($orderMock, CheckoutOrder::class);
+
+        $quote = $this->quoteGetter->execute('100000001');
+        $this->checkoutSession->replaceQuote($quote);
+        $methodBefore = $quote->getShippingAddress()->getShippingMethod();
+
+        $this->dispatchShippingMethodUpdate($klarnaOrderId, 'freeshipping_freeshipping');
+
+        $this->assertEquals(400, $this->getResponse()->getHttpResponseCode());
+        $this->assertStringContainsString('Your payment is being processed', $this->getResponse()->getBody());
+        $this->assertEquals($methodBefore, $this->loadShippingMethod((int) $quote->getId()));
+    }
+
+    /**
+     * KUSTOM-128: an order creation holds the lock (second connection), so the callback is refused
+     *
+     * @magentoAppArea frontend
+     * @magentoAppIsolation enabled
+     * @magentoDbIsolation enabled
+     * @magentoConfigFixture current_store payment/klarna_kco/active 1
+     * @magentoConfigFixture current_store payment/klarna_kss/enabled 0
+     * @magentoConfigFixture current_store klarna/api/debug 1
+     * @magentoConfigFixture current_store general/region/state_required ''
+     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/quote_setup1_single_simple_product.php
+     */
+    public function testRefusedWhileCreationLockIsHeldByAnotherConnection(): void
+    {
+        $klarnaOrderId = '123456-1234-1234-1234-1234567890';
+        $creationRequestLock = $this->createLockWithOwnConnection();
+        $this->_objectManager->addSharedInstance($this->createLockWithOwnConnection(), CreationLock::class);
+        $this->assertTrue($creationRequestLock->acquire($klarnaOrderId, 0));
+
+        try {
+            $quote = $this->quoteGetter->execute('100000001');
+            $this->checkoutSession->replaceQuote($quote);
+            $methodBefore = $quote->getShippingAddress()->getShippingMethod();
+
+            $this->dispatchShippingMethodUpdate($klarnaOrderId, 'freeshipping_freeshipping');
+
+            $this->assertEquals(400, $this->getResponse()->getHttpResponseCode());
+            $this->assertEquals($methodBefore, $this->loadShippingMethod((int) $quote->getId()));
+        } finally {
+            $creationRequestLock->release($klarnaOrderId);
+        }
+    }
+
+    /**
+     * KUSTOM-128: the lock held by the guard is released when the request is done (push can acquire it)
+     *
+     * @magentoAppArea frontend
+     * @magentoAppIsolation enabled
+     * @magentoDbIsolation enabled
+     * @magentoConfigFixture current_store payment/klarna_kco/active 1
+     * @magentoConfigFixture current_store payment/klarna_kss/enabled 0
+     * @magentoConfigFixture current_store klarna/api/debug 1
+     * @magentoConfigFixture current_store general/region/state_required ''
+     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/quote_setup1_single_simple_product.php
+     */
+    public function testLockIsReleasedAfterGuardedRequest(): void
+    {
+        $klarnaOrderId = '123456-1234-1234-1234-1234567890';
+        $this->_objectManager->addSharedInstance($this->createLockWithOwnConnection(), CreationLock::class);
+
+        $this->checkoutSession->replaceQuote($this->quoteGetter->execute('100000001'));
+        $this->dispatchShippingMethodUpdate($klarnaOrderId);
+        $this->assertEquals(200, $this->getResponse()->getHttpResponseCode());
+
+        $pushLock = $this->createLockWithOwnConnection();
+        try {
+            $this->assertTrue($pushLock->acquire($klarnaOrderId, 0));
+        } finally {
+            $pushLock->release($klarnaOrderId);
+        }
+    }
+
+    /**
+     * The test framework replaces the locker by a dummy, so a real database locker with its own connection is used
+     *
+     * @return CreationLock
+     */
+    private function createLockWithOwnConnection(): CreationLock
+    {
+        return new CreationLock(new Database(
+            $this->_objectManager->create(ResourceConnection::class),
+            $this->_objectManager->get(DeploymentConfig::class)
+        ));
+    }
+
+    /**
+     * @param string $klarnaOrderId
+     * @param string $optionId
+     * @return void
+     */
+    private function dispatchShippingMethodUpdate(string $klarnaOrderId, string $optionId = 'flatrate_flatrate'): void
+    {
+        $this->getRequest()->setContent(json_encode(['selected_shipping_option' => ['id' => $optionId]]));
+        $this->getRequest()->setMethod(Http::METHOD_POST);
+        $this->dispatch('kco/api/shippingMethodUpdate/id/' . $klarnaOrderId);
+    }
+
+    /**
+     * Read straight from the database
+     *
+     * @param int $quoteId
+     * @return string|null
+     */
+    private function loadShippingMethod(int $quoteId): ?string
+    {
+        $quote = $this->_objectManager->create(QuoteFactory::class)->create();
+        $this->_objectManager->get(QuoteResource::class)->load($quote, $quoteId);
+
+        return $quote->getShippingAddress()->getShippingMethod();
     }
 }
