@@ -13,6 +13,8 @@ use Klarna\Base\Model\Quote\Address\Handler;
 use Klarna\Base\Model\Quote\Customer;
 use Klarna\Kco\Model\Checkout\Company\Update;
 use Klarna\Base\Model\Quote\ShippingMethod\SelectionAssurance;
+use Klarna\Logger\Api\LoggerInterface;
+use Magento\Framework\App\ObjectManager;
 use Magento\Quote\Model\QuoteRepository;
 use Magento\Quote\Api\CartRepositoryInterface;
 use Magento\Quote\Api\Data\CartInterface;
@@ -52,6 +54,10 @@ class FullUpdate
      * @var Payment
      */
     private Payment $payment;
+    /**
+     * @var LoggerInterface
+     */
+    private LoggerInterface $logger;
 
     /**
      * @param Customer $customer
@@ -60,6 +66,7 @@ class FullUpdate
      * @param CartRepositoryInterface $cartRepository
      * @param Update $companyIdUpdate
      * @param Payment $payment
+     * @param LoggerInterface|null $logger
      * @codeCoverageIgnore
      */
     public function __construct(
@@ -68,7 +75,8 @@ class FullUpdate
         SelectionAssurance $selectionAssurance,
         CartRepositoryInterface $cartRepository,
         Update $companyIdUpdate,
-        Payment $payment
+        Payment $payment,
+        ?LoggerInterface $logger = null
     ) {
         $this->customer = $customer;
         $this->handler = $handler;
@@ -76,6 +84,7 @@ class FullUpdate
         $this->cartRepository = $cartRepository;
         $this->companyIdUpdate = $companyIdUpdate;
         $this->payment = $payment;
+        $this->logger = $logger ?: ObjectManager::getInstance()->get(LoggerInterface::class);
     }
 
     /**
@@ -100,6 +109,7 @@ class FullUpdate
         // Decided before addToQuote: importing the payment collects totals, which would delete the stored rates.
         $reuseStoredRate = $this->isKustomOrderCompleted($klarnaRequest)
             && $this->hasStoredRateForSelectedMethod($quote);
+        $this->logShippingRateDecision($klarnaRequest, $klarnaId, $quote, $reuseStoredRate);
         if ($reuseStoredRate) {
             $quote->getShippingAddress()->setCollectShippingRates(false);
         }
@@ -134,6 +144,48 @@ class FullUpdate
         }
 
         return $quote;
+    }
+
+    /**
+     * Logs whether the rate stored at validate is reused or live rates are collected, and why
+     *
+     * @param DataObject $klarnaRequest
+     * @param string $klarnaId
+     * @param CartInterface $quote
+     * @param bool $reuseStoredRate
+     */
+    private function logShippingRateDecision(
+        DataObject $klarnaRequest,
+        string $klarnaId,
+        CartInterface $quote,
+        bool $reuseStoredRate
+    ): void {
+        $status = $klarnaRequest->getStatus();
+        $status = is_string($status) ? $status : 'none';
+        $method = $quote->isVirtual() ? '' : (string) $quote->getShippingAddress()->getShippingMethod();
+
+        if ($reuseStoredRate) {
+            $rate = $quote->getShippingAddress()->getShippingRateByCode($method);
+            $this->logger->info(
+                'FullUpdate: reusing shipping rate stored at validate, method: ' . $method
+                . ', amount: ' . ($rate ? $rate->getPrice() : '') . ', status: ' . $status
+                . ', Kustom checkout id: ' . $klarnaId
+            );
+            return;
+        }
+
+        if (!$this->isKustomOrderCompleted($klarnaRequest)) {
+            $reason = 'status ' . $status;
+        } elseif ($quote->isVirtual()) {
+            $reason = 'virtual quote';
+        } elseif ($method === '') {
+            $reason = 'no shipping method';
+        } else {
+            $reason = 'no stored rate for ' . $method;
+        }
+        $this->logger->info(
+            'FullUpdate: collecting live shipping rates, reason: ' . $reason . ', Kustom checkout id: ' . $klarnaId
+        );
     }
 
     /**

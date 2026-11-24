@@ -15,6 +15,7 @@ use Klarna\Base\Model\Quote\ShippingMethod\SelectionAssurance;
 use Klarna\Kco\Model\Cart\FullUpdate;
 use Klarna\Kco\Model\Cart\Payment;
 use Klarna\Kco\Model\Checkout\Company\Update;
+use Klarna\Logger\Api\LoggerInterface;
 use Magento\Framework\DataObject;
 use Magento\Quote\Api\CartRepositoryInterface;
 use Magento\Quote\Model\Quote;
@@ -61,6 +62,10 @@ class FullUpdateTest extends TestCase
      * @var Payment|MockObject
      */
     private $payment;
+    /**
+     * @var string[] Info lines written by the model
+     */
+    private array $infoLogs = [];
     /**
      * @var bool[]
      */
@@ -128,6 +133,69 @@ class FullUpdateTest extends TestCase
             ],
             $this->calls
         );
+    }
+
+    /**
+     * @covers ::updateByKlarnaRequestObject
+     */
+    public function testReusedRateIsLogged(): void
+    {
+        $this->prepareAddress('flatrate_flatrate', $this->rate(false));
+        $this->expectStoredRateReused();
+
+        $this->model->updateByKlarnaRequestObject($this->request('checkout_complete'), 'abc-1', $this->quote);
+
+        static::assertCount(1, $this->infoLogs);
+        static::assertStringStartsWith(
+            'FullUpdate: reusing shipping rate stored at validate, method: flatrate_flatrate, amount: ',
+            $this->infoLogs[0]
+        );
+        static::assertStringEndsWith(', status: checkout_complete, Kustom checkout id: abc-1', $this->infoLogs[0]);
+    }
+
+    /**
+     * @covers ::updateByKlarnaRequestObject
+     * @dataProvider liveCollectionReasonProvider
+     * @param string|null $status
+     * @param string|null $method
+     * @param string|false $rate
+     * @param bool $virtual
+     * @param string $reason
+     */
+    #[DataProvider('liveCollectionReasonProvider')]
+    public function testLiveCollectionReasonIsLogged(
+        ?string $status,
+        ?string $method,
+        $rate,
+        bool $virtual,
+        string $reason
+    ): void {
+        $this->quote->method('isVirtual')->willReturn($virtual);
+        $this->prepareAddress($method, $rate === 'rate' ? $this->rate(false) : $rate);
+        $this->expectPreCollect();
+
+        $this->model->updateByKlarnaRequestObject($this->request($status), 'abc-1', $this->quote);
+
+        static::assertSame(
+            ['FullUpdate: collecting live shipping rates, reason: ' . $reason . ', Kustom checkout id: abc-1'],
+            $this->infoLogs
+        );
+    }
+
+    /**
+     * @return array
+     */
+    public static function liveCollectionReasonProvider(): array
+    {
+        return [
+            'validate' => ['checkout_incomplete', 'flatrate_flatrate', 'rate', false, 'status checkout_incomplete'],
+            'no status' => [null, 'flatrate_flatrate', 'rate', false, 'status none'],
+            'virtual' => ['checkout_complete', null, false, true, 'virtual quote'],
+            'no method' => ['checkout_complete', null, false, false, 'no shipping method'],
+            'no rate' => [
+                'checkout_complete', 'flatrate_flatrate', false, false, 'no stored rate for flatrate_flatrate'
+            ],
+        ];
     }
 
     /**
@@ -335,7 +403,21 @@ class FullUpdateTest extends TestCase
             $this->selectionAssurance,
             $cartRepository,
             $this->createMock(Update::class),
-            $this->payment
+            $this->payment,
+            $this->createConfiguredLogger()
         );
+    }
+
+    /**
+     * @return LoggerInterface|MockObject
+     */
+    private function createConfiguredLogger()
+    {
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->method('info')->willReturnCallback(function ($message): void {
+            $this->infoLogs[] = (string) $message;
+        });
+
+        return $logger;
     }
 }
