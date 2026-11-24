@@ -127,25 +127,26 @@ class MutationGuard
     private function assertFrontendAllowed(string $kustomId): void
     {
         if ($this->checkoutOrder->isMagentoOrderExists($kustomId)) {
-            $this->logger->debug('Mutation guard: refused, order exists: ' . $kustomId);
+            $this->logger->info('Mutation guard: refused, order exists: ' . $kustomId);
             throw new CheckoutLockedException();
         }
 
         $quote = $this->loadQuote($kustomId);
         $validatedAt = $quote !== null ? $quote->getValidatedAt() : null;
         if ($validatedAt === null) {
+            $this->logger->debug('Mutation guard: allowed, not validated: ' . $kustomId);
             return;
         }
 
         $age = $this->dateTime->gmtTimestamp() - $this->toTimestamp($validatedAt);
         if ($age < $this->blockWindowSeconds) {
-            $this->logger->debug('Mutation guard: refused, validated ' . $age . 's ago: ' . $kustomId);
+            $this->logger->info('Mutation guard: refused, validated ' . $age . 's ago: ' . $kustomId);
             throw new CheckoutLockedException();
         }
 
         $status = $this->getKustomStatus($quote, $kustomId);
         if (in_array($status, self::COMPLETED_STATUSES, true)) {
-            $this->logger->debug('Mutation guard: refused, checkout status ' . $status . ': ' . $kustomId);
+            $this->logger->info('Mutation guard: refused, checkout status ' . $status . ': ' . $kustomId);
             throw new CheckoutLockedException();
         }
         if ($status !== 'checkout_incomplete') {

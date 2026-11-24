@@ -173,6 +173,10 @@ class Validate extends CsrfAbstract implements HttpPostActionInterface
     {
         try {
             $this->validatedMarker->update((string) $checkoutId, $validatedAt);
+            $this->logger->info(
+                'Validate: validated marker ' . ($validatedAt === null ? 'cleared' : 'set')
+                . ', Kustom checkout id: ' . $checkoutId
+            );
         } catch (\Throwable $e) {
             $this->logger->warning('Validate: could not update the validated marker: ' . $e->getMessage());
         }

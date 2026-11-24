@@ -16,6 +16,7 @@ use Klarna\Kco\Model\Api\Rest\Service\Checkout;
 use Klarna\Kco\Model\Checkout\MutationGuard;
 use Klarna\Kco\Model\Order\Order as CheckoutOrder;
 use Klarna\Kco\Model\Quote as KustomQuote;
+use Klarna\Logger\Api\LoggerInterface;
 use Magento\TestFramework\Helper\Bootstrap;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -163,6 +164,25 @@ class MutationGuardTest extends TestCase
         ])->guardFrontend(self::CHECKOUT_ID);
 
         $this->addToAssertionCount(1);
+    }
+
+    public function testRefusalIsLoggedAtInfoAndNoMarkerAtDebug(): void
+    {
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects($this->once())->method('debug')
+            ->with('Mutation guard: allowed, not validated: ' . self::CHECKOUT_ID);
+        $logger->expects($this->once())->method('info')
+            ->with($this->stringStartsWith('Mutation guard: refused, validated '));
+        $guard = Bootstrap::getObjectManager()->create(MutationGuard::class, [
+            'checkoutOrder' => $this->checkoutOrder,
+            'checkoutApi' => $this->checkoutApi,
+            'logger' => $logger,
+        ]);
+
+        $guard->guardFrontend(self::CHECKOUT_ID);
+        $this->setMarker(gmdate('Y-m-d H:i:s', time() - 10));
+        $this->expectException(CheckoutLockedException::class);
+        $guard->guardFrontend(self::CHECKOUT_ID);
     }
 
     private function createGuard(?CheckoutOrder $order = null): MutationGuard

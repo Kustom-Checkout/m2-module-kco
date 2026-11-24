@@ -174,4 +174,24 @@ class ValidateTest extends TestCase
         static::assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', (string) $values[0]);
         static::assertNull($values[1]);
     }
+
+    /**
+     * @covers ::execute
+     */
+    public function testExecuteLogsMarkerSetAndCleared(): void
+    {
+        $info = [];
+        $this->logger->method('info')->willReturnCallback(function ($message) use (&$info): void {
+            $info[] = (string) $message;
+        });
+        $this->result->method('getJsonResult')->willReturn($this->createMock(Json::class));
+
+        $this->controller->execute();
+        $this->handler->method('validateRequestObject')
+            ->willThrowException(new AddressValidationException(__('We could not use this address.')));
+        $this->controller->execute();
+
+        static::assertContains('Validate: validated marker set, Kustom checkout id: checkout-id-1', $info);
+        static::assertContains('Validate: validated marker cleared, Kustom checkout id: checkout-id-1', $info);
+    }
 }

@@ -7,6 +7,7 @@
 
 ### Features / changes
 * KUSTOM-128: New nullable column `klarna_kco_quote.validated_at`; run `bin/magento setup:upgrade` after updating
+* KUSTOM-127, KUSTOM-128, KUSTOM-129: klarna.log shows the address check result, whether the validated shipping rate was reused, the validated marker and every refused checkout-page change
 
 ### Fixes
 * KUSTOM-129: Addresses Magento cannot save are now rejected in the validate callback, so the customer can correct them before paying

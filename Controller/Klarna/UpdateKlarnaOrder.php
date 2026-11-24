@@ -87,6 +87,8 @@ class UpdateKlarnaOrder implements HttpPostActionInterface
      */
     public function execute()
     {
+        $kustomId = '';
+        $this->logger->debug('UpdateKlarnaOrder: start');
         try {
             $kustomId = $this->getKustomId($this->initializer->getKcoSession()->getQuote());
             if ($kustomId !== '') {
@@ -96,6 +98,7 @@ class UpdateKlarnaOrder implements HttpPostActionInterface
             return $this->ajax->getSummaryResponse();
         } catch (CheckoutLockedException $e) {
             // KUSTOM-128: payment in progress or order created, the quote stays untouched
+            $this->logger->info('UpdateKlarnaOrder: refused, checkout locked, Kustom checkout id: ' . $kustomId);
             return $this->ajax->getSummaryResponse(
                 ['error' => true, 'locked' => true, 'message' => $e->getMessage()]
             );
@@ -125,7 +128,9 @@ class UpdateKlarnaOrder implements HttpPostActionInterface
             return (string) $this->klarnaQuoteRepository->getActiveByQuote($quote)->getKlarnaCheckoutId();
         } catch (\Throwable $e) {
             // Fail-open: without a Kustom id the guard is skipped, as before KUSTOM-128
-            $this->logger->warning('Kustom checkout id lookup failed, mutation guard skipped: ' . $e->getMessage());
+            $this->logger->warning(
+                'UpdateKlarnaOrder: Kustom checkout id lookup failed, mutation guard skipped: ' . $e->getMessage()
+            );
 
             return '';
         }

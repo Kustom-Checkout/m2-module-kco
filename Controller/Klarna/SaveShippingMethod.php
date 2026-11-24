@@ -103,13 +103,16 @@ class SaveShippingMethod implements HttpPostActionInterface
      */
     public function execute()
     {
+        $kustomId = '';
         try {
             $body = json_decode($this->request->getContent(), true);
             $quote = $this->kcoInitializer->getKcoSession()->getQuote();
             $method = $body['carrier_code'] . '_' . $body['method_code'];
+            $this->logger->debug('SaveShippingMethod: start, method: ' . $method);
 
             // KUSTOM-128: saving the method the quote already has changes nothing (e.g. a page reload)
             if ($quote->getShippingAddress()->getShippingMethod() === $method) {
+                $this->logger->debug('SaveShippingMethod: method unchanged, nothing to save');
                 return $this->ajax->getSummaryResponse();
             }
 
@@ -121,6 +124,7 @@ class SaveShippingMethod implements HttpPostActionInterface
             $this->quoteShippingMethod->updateShippingMethod($quote, $method);
         } catch (CheckoutLockedException $e) {
             // KUSTOM-128: payment in progress or order created, the quote stays untouched
+            $this->logger->info('SaveShippingMethod: refused, checkout locked, Kustom checkout id: ' . $kustomId);
             return $this->ajax->getSummaryResponse(
                 ['error' => true, 'locked' => true, 'message' => $e->getMessage()]
             );
@@ -150,7 +154,9 @@ class SaveShippingMethod implements HttpPostActionInterface
             return (string) $this->klarnaQuoteRepository->getActiveByQuote($quote)->getKlarnaCheckoutId();
         } catch (\Throwable $e) {
             // Fail-open: without a Kustom id the guard is skipped, as before KUSTOM-128
-            $this->logger->warning('Kustom checkout id lookup failed, mutation guard skipped: ' . $e->getMessage());
+            $this->logger->warning(
+                'SaveShippingMethod: Kustom checkout id lookup failed, mutation guard skipped: ' . $e->getMessage()
+            );
 
             return '';
         }
