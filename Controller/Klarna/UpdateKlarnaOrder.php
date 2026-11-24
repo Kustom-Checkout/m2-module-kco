@@ -18,7 +18,6 @@ use Klarna\Kco\Model\Checkout\Kco\Initializer;
 use Klarna\Logger\Api\LoggerInterface;
 use Magento\Framework\App\Action\HttpPostActionInterface;
 use Magento\Framework\App\ObjectManager;
-use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Framework\Message\ManagerInterface;
 use Magento\Framework\Controller\Result\Json;
 use Magento\Framework\Controller\ResultInterface;
@@ -124,7 +123,10 @@ class UpdateKlarnaOrder implements HttpPostActionInterface
 
         try {
             return (string) $this->klarnaQuoteRepository->getActiveByQuote($quote)->getKlarnaCheckoutId();
-        } catch (NoSuchEntityException $e) {
+        } catch (\Throwable $e) {
+            // Fail-open: without a Kustom id the guard is skipped, as before KUSTOM-128
+            $this->logger->warning('Kustom checkout id lookup failed, mutation guard skipped: ' . $e->getMessage());
+
             return '';
         }
     }

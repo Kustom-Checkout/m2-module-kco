@@ -19,7 +19,6 @@ use Klarna\Kco\Model\Responder\Ajax;
 use Magento\Framework\App\Action\HttpPostActionInterface;
 use Magento\Framework\App\ObjectManager;
 use Magento\Framework\Exception\LocalizedException;
-use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Framework\Controller\ResultInterface;
 use Magento\Framework\App\RequestInterface;
 use Magento\Framework\Message\ManagerInterface;
@@ -110,11 +109,13 @@ class SaveShippingMethod implements HttpPostActionInterface
             $method = $body['carrier_code'] . '_' . $body['method_code'];
 
             // KUSTOM-128: saving the method the quote already has changes nothing (e.g. a page reload)
-            if ($quote->getShippingAddress()->getShippingMethod() !== $method) {
-                $kustomId = $this->getKustomId($quote);
-                if ($kustomId !== '') {
-                    $this->mutationGuard->guardFrontend($kustomId);
-                }
+            if ($quote->getShippingAddress()->getShippingMethod() === $method) {
+                return $this->ajax->getSummaryResponse();
+            }
+
+            $kustomId = $this->getKustomId($quote);
+            if ($kustomId !== '') {
+                $this->mutationGuard->guardFrontend($kustomId);
             }
 
             $this->quoteShippingMethod->updateShippingMethod($quote, $method);
@@ -147,7 +148,10 @@ class SaveShippingMethod implements HttpPostActionInterface
 
         try {
             return (string) $this->klarnaQuoteRepository->getActiveByQuote($quote)->getKlarnaCheckoutId();
-        } catch (NoSuchEntityException $e) {
+        } catch (\Throwable $e) {
+            // Fail-open: without a Kustom id the guard is skipped, as before KUSTOM-128
+            $this->logger->warning('Kustom checkout id lookup failed, mutation guard skipped: ' . $e->getMessage());
+
             return '';
         }
     }

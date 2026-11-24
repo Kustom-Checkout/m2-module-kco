@@ -114,7 +114,12 @@ define([
                     return;
                 }
 
-                updateKlarnaOrder();
+                if (!previousMethod ||
+                    previousMethod['carrier_code'] !== shippingMethod['carrier_code'] ||
+                    previousMethod['method_code'] !== shippingMethod['method_code']
+                ) {
+                    updateKlarnaOrder();
+                }
             });
 
             return true;

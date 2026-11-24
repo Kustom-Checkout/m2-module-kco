@@ -57,4 +57,29 @@ class UpdateKlarnaOrderTest extends AbstractController
         $this->_objectManager->get(QuoteResource::class)->load($reloaded, (int) $quote->getId());
         $this->assertEquals($grandTotalBefore, (float) $reloaded->getGrandTotal());
     }
+
+    /**
+     * @magentoAppArea frontend
+     * @magentoAppIsolation enabled
+     * @magentoDbIsolation enabled
+     * @magentoConfigFixture current_store payment/klarna_kco/active 1
+     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/quote_setup1_single_simple_product.php
+     */
+    public function testAllowedWithoutMarkerUpdatesKustomOrder(): void
+    {
+        $checkoutMock = $this->createMock(Checkout::class);
+        $checkoutMock->expects($this->atLeastOnce())->method('updateOrder')
+            ->willReturn(['id' => self::KLARNA_ORDER_ID, 'is_successful' => true]);
+        $this->_objectManager->addSharedInstance($checkoutMock, Checkout::class);
+
+        $quote = $this->_objectManager->get(GetQuoteByReservedOrderId::class)->execute('100000001');
+        $this->_objectManager->get(CheckoutSession::class)->replaceQuote($quote);
+
+        $this->getRequest()->setMethod(Http::METHOD_POST);
+        $this->dispatch('checkout/klarna/updateKlarnaOrder');
+
+        $body = json_decode($this->getResponse()->getBody(), true);
+        $this->assertFalse($body['locked'] ?? false);
+        $this->assertStringNotContainsString('Your payment is being processed', $this->getResponse()->getBody());
+    }
 }

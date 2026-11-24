@@ -15,6 +15,7 @@ use Klarna\Kco\Exception\CheckoutLockedException;
 use Klarna\Kco\Model\Api\Rest\Service\Checkout;
 use Klarna\Kco\Model\Checkout\MutationGuard;
 use Klarna\Kco\Model\Order\Order as CheckoutOrder;
+use Klarna\Kco\Model\Quote as KustomQuote;
 use Magento\TestFramework\Helper\Bootstrap;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
@@ -127,6 +128,23 @@ class MutationGuardTest extends TestCase
         $order->method('isMagentoOrderExists')->willThrowException(new \RuntimeException('db down'));
 
         $this->createGuard($order)->guardFrontend(self::CHECKOUT_ID);
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function testUnreadableMarkerTimestampFailsOpen(): void
+    {
+        $quote = $this->createMock(KustomQuote::class);
+        $quote->method('getValidatedAt')->willReturn('not-a-date');
+        $repository = $this->createMock(QuoteRepositoryInterface::class);
+        $repository->method('getByCheckoutId')->willReturn($quote);
+        $this->checkoutApi->expects($this->never())->method('getOrder');
+
+        Bootstrap::getObjectManager()->create(MutationGuard::class, [
+            'quoteRepository' => $repository,
+            'checkoutOrder' => $this->checkoutOrder,
+            'checkoutApi' => $this->checkoutApi,
+        ])->guardFrontend(self::CHECKOUT_ID);
 
         $this->addToAssertionCount(1);
     }
