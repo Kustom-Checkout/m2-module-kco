@@ -1,38 +1,17 @@
 # Changelog
 
-## 12.4.7 / 2026-11-20
+## 12.4.5 / 2026-11-24
 
 ### Breaking changes
 * None
 
 ### Features / changes
-* None
-
-### Fixes
-* KUSTOM-128: Quote changes are refused after a successful validate (5 minute block) and while the order is being created or exists
-
-## 12.4.6 / 2026-11-20
-
-### Breaking changes
-* None
-
-### Features / changes
-* None
-
-### Fixes
-* KUSTOM-127: Push and confirmation reuse the shipping rate accepted in the validate callback instead of collecting carrier rates again after payment
-
-## 12.4.5 / 2026-11-20
-
-### Breaking changes
-* None
-
-### Features / changes
-* None
+* KUSTOM-128: New nullable column `klarna_kco_quote.validated_at`; run `bin/magento setup:upgrade` after updating
 
 ### Fixes
 * KUSTOM-129: Addresses Magento cannot save are now rejected in the validate callback, so the customer can correct them before paying
 * KUSTOM-127: Push and confirmation reuse the shipping rate accepted in the validate callback instead of collecting carrier rates again after payment
+* KUSTOM-128: For 5 minutes after a successful validate, and once the order exists, shipping method changes and order updates from the checkout page are refused with a message; changes inside the Kustom checkout are not affected
 
 ## 12.4.4 / 2026-10-12
 
