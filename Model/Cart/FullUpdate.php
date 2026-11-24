@@ -103,7 +103,7 @@ class FullUpdate
         if ($reuseStoredRate) {
             $quote->getShippingAddress()->setCollectShippingRates(false);
         }
-        $this->payment->addToQuote($quote, !$reuseStoredRate);
+        $this->addPaymentToQuote($quote, $reuseStoredRate);
         $this->companyIdUpdate->updateCustomerBusinessIdFromRequest($klarnaRequest, $quote);
         $this->handler->setBillingAddressDataFromRequest($klarnaRequest, $quote);
         $this->handler->setShippingAddressDataFromRequest($klarnaRequest, $quote);
@@ -176,5 +176,26 @@ class FullUpdate
         $rate = $address->getShippingRateByCode($method);
 
         return $rate && !$rate->isDeleted();
+    }
+
+    /**
+     * Imports the payment; a transient address flag keeps the stored rates while reusing them
+     *
+     * @param CartInterface $quote
+     * @param bool $keepShippingRates
+     */
+    private function addPaymentToQuote(CartInterface $quote, bool $keepShippingRates): void
+    {
+        $address = $quote->getShippingAddress();
+        if ($keepShippingRates) {
+            $address->setData(Payment::KEEP_SHIPPING_RATES_FLAG, true);
+        }
+        try {
+            $this->payment->addToQuote($quote);
+        } finally {
+            if ($keepShippingRates) {
+                $address->unsetData(Payment::KEEP_SHIPPING_RATES_FLAG);
+            }
+        }
     }
 }

@@ -36,6 +36,10 @@ class PaymentTest extends TestCase
      * @var array
      */
     private array $flagCalls = [];
+    /**
+     * @var bool
+     */
+    private bool $keepFlag = false;
 
     /**
      * @covers ::addToQuote
@@ -50,9 +54,10 @@ class PaymentTest extends TestCase
     /**
      * @covers ::addToQuote
      */
-    public function testAddToQuoteCanSkipShippingRateCollection(): void
+    public function testAddToQuoteSkipsShippingRateCollectionWhenKeepFlagIsSet(): void
     {
-        $this->model->addToQuote($this->quote, false);
+        $this->keepFlag = true;
+        $this->model->addToQuote($this->quote);
 
         static::assertSame([], $this->flagCalls);
     }
@@ -63,12 +68,16 @@ class PaymentTest extends TestCase
     protected function setUp(): void
     {
         $this->flagCalls = [];
+        $this->keepFlag = false;
         $this->address = $this->createMock(Address::class);
         $this->address->method('__call')->willReturnCallback(function (string $name, array $args) {
             if ($name === 'setCollectShippingRates') {
                 $this->flagCalls[] = $args;
             }
             return $this->address;
+        });
+        $this->address->method('getData')->willReturnCallback(function ($key = '') {
+            return $key === Payment::KEEP_SHIPPING_RATES_FLAG ? $this->keepFlag : null;
         });
         $payment = $this->createMock(Quote\Payment::class);
         $this->quote = $this->createMock(Quote::class);

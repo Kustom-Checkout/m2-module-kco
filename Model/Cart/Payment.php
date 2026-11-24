@@ -17,20 +17,23 @@ use Magento\Quote\Api\Data\CartInterface;
  */
 class Payment
 {
-    
+    /**
+     * Transient address flag: when set, the stored shipping rates are kept (no re-collection on import)
+     */
+    public const KEEP_SHIPPING_RATES_FLAG = 'kustom_keep_shipping_rates';
+
     /**
      * Add payment specific information to the quote
      *
      * @param CartInterface $quote
-     * @param bool $collectShippingRates False keeps the stored shipping rates (no re-collection on import)
      */
-    public function addToQuote(CartInterface $quote, bool $collectShippingRates = true): void
+    public function addToQuote(CartInterface $quote): void
     {
         if ($quote->isVirtual()) {
             $address = $quote->getBillingAddress();
         } else {
             $address = $quote->getShippingAddress();
-            if ($collectShippingRates) {
+            if (!$address->getData(self::KEEP_SHIPPING_RATES_FLAG)) {
                 $address->setCollectShippingRates(true);
             }
         }

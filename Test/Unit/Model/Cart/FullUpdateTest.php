@@ -65,6 +65,14 @@ class FullUpdateTest extends TestCase
      * @var bool[]
      */
     private array $addToQuoteArgs = [];
+    /**
+     * @var bool Current state of the transient keep-rates flag on the address
+     */
+    private bool $keepFlag = false;
+    /**
+     * @var array Every change of the flag, in order
+     */
+    private array $flagChanges = [];
 
     /**
      * @covers ::updateByKlarnaRequestObject
@@ -90,6 +98,8 @@ class FullUpdateTest extends TestCase
         $this->model->updateByKlarnaRequestObject($this->request('checkout_complete'), '1', $this->quote);
 
         static::assertSame([false], $this->addToQuoteArgs);
+        static::assertSame(['set', 'unset'], $this->flagChanges);
+        static::assertFalse($this->keepFlag);
         static::assertSame(
             [
                 'flag:false', 'addToQuote:false', 'flag:false', 'ensure', 'collectTotals',
@@ -280,8 +290,11 @@ class FullUpdateTest extends TestCase
     {
         $this->calls = [];
         $this->addToQuoteArgs = [];
+        $this->keepFlag = false;
+        $this->flagChanges = [];
         $this->payment = $this->createMock(Payment::class);
-        $this->payment->method('addToQuote')->willReturnCallback(function ($quote, bool $collect = true) {
+        $this->payment->method('addToQuote')->willReturnCallback(function ($quote) {
+            $collect = !$this->keepFlag;
             $this->addToQuoteArgs[] = $collect;
             $this->calls[] = 'addToQuote:' . ($collect ? 'true' : 'false');
         });
@@ -289,6 +302,20 @@ class FullUpdateTest extends TestCase
         $this->handler = $this->createMock(Handler::class);
         $this->customer = $this->createMock(Customer::class);
         $this->address = $this->createMock(Address::class);
+        $this->address->method('setData')->willReturnCallback(function ($key, $value = null) {
+            if ($key === Payment::KEEP_SHIPPING_RATES_FLAG) {
+                $this->keepFlag = true;
+                $this->flagChanges[] = 'set';
+            }
+            return $this->address;
+        });
+        $this->address->method('unsetData')->willReturnCallback(function ($key = null) {
+            if ($key === Payment::KEEP_SHIPPING_RATES_FLAG) {
+                $this->keepFlag = false;
+                $this->flagChanges[] = 'unset';
+            }
+            return $this->address;
+        });
         $this->quote = $this->createMock(Quote::class);
         $this->quote->method('getShippingAddress')->willReturn($this->address);
         $this->quote->method('getReservedOrderId')->willReturn('100000001');
