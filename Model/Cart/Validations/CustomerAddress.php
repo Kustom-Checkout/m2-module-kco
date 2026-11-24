@@ -54,6 +54,7 @@ class CustomerAddress implements CheckoutValidationInterface
     public function validate(DataObject $request, CartInterface $quote): void
     {
         if (!$quote instanceof Quote || !$quote->getBillingAddress()->getCountryId()) {
+            $this->logger->debug('Validate: address check skipped, no billing address country');
             return;
         }
 
@@ -65,10 +66,11 @@ class CustomerAddress implements CheckoutValidationInterface
 
         try {
             $this->customerManagement->validateAddresses($probe);
+            $this->logger->info('Validate: address check passed');
         } catch (ValidatorException $e) {
-            // The validator messages can contain the submitted values: only their number is logged.
             $this->logger->warning(
                 'Validate: Magento rejects the billing address, validation errors: ' . count($e->getMessages())
+                . ', fields: ' . implode(', ', $this->getFailedFields($e))
             );
             throw new AddressValidationException(
                 __('We could not use this address. Please check the billing address and try again.')
@@ -78,5 +80,31 @@ class CustomerAddress implements CheckoutValidationInterface
                 'Validate: Address check skipped, ' . get_class($e) . ': ' . $e->getMessage()
             );
         }
+    }
+
+    /**
+     * Getting back the names of the failed fields, never the submitted values
+     *
+     * Only fixed message texts are read: `"<field>" is required` and `Invalid <Field>.` (Magento's
+     * city, street and telephone validators). Anything else, e.g. a translated message, is reported as `other`.
+     *
+     * @param ValidatorException $e
+     * @return string[]
+     */
+    private function getFailedFields(ValidatorException $e): array
+    {
+        $fields = [];
+        foreach ($e->getMessages() as $message) {
+            $text = (string) $message->getText();
+            if (preg_match('/^"([A-Za-z_]+)" is required/', $text, $match)
+                || preg_match('/^Invalid ([A-Za-z ]+?)\./', $text, $match)
+            ) {
+                $fields[] = $match[1];
+                continue;
+            }
+            $fields[] = 'other';
+        }
+
+        return array_values(array_unique($fields)) ?: ['unknown'];
     }
 }

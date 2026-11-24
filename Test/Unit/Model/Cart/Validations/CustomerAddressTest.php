@@ -72,6 +72,7 @@ class CustomerAddressTest extends TestCase
     {
         $this->customerManagement->expects(static::once())->method('validateAddresses');
         $this->logger->expects(static::never())->method('warning');
+        $this->logger->expects(static::once())->method('info')->with('Validate: address check passed');
 
         $this->model->validate(new DataObject(), $this->createQuote('SE', null));
     }
@@ -85,8 +86,9 @@ class CustomerAddressTest extends TestCase
             ->willThrowException(new ValidatorException(null, null, ['city' => [__('Invalid City: secret value')]]));
         $this->logger->expects(static::once())->method('warning')
             ->with(static::callback(
-                fn (string $m): bool => str_contains($m, 'errors: 1') && !str_contains($m, 'secret')
+                fn (string $m): bool => str_contains($m, 'errors: 1, fields: other') && !str_contains($m, 'secret')
             ));
+        $this->logger->expects(static::never())->method('info');
 
         try {
             $this->model->validate(new DataObject(), $this->createQuote('SE', null));
@@ -98,6 +100,28 @@ class CustomerAddressTest extends TestCase
             );
             static::assertStringNotContainsString('secret', $e->getMessage());
         }
+    }
+
+    /**
+     * @covers ::validate
+     * @covers ::getFailedFields
+     */
+    public function testValidateLogsOnlyTheFailedFieldNames(): void
+    {
+        $this->customerManagement->method('validateAddresses')
+            ->willThrowException(new ValidatorException(null, null, [
+                'city' => [__('Invalid City. Please use letters, numbers, spaces.')],
+                'company' => [__('"%fieldName" is required. Enter and try again.', ['fieldName' => 'company'])],
+                'other' => [__('Invalid value of "%1" provided for the city field.', 'secret value')],
+            ]));
+        $this->logger->expects(static::once())->method('warning')
+            ->with(static::callback(
+                fn (string $m): bool => str_contains($m, 'errors: 3, fields: City, company, other')
+                    && !str_contains($m, 'secret')
+            ));
+
+        $this->expectException(AddressValidationException::class);
+        $this->model->validate(new DataObject(), $this->createQuote('SE', null));
     }
 
     /**
@@ -118,6 +142,8 @@ class CustomerAddressTest extends TestCase
     public function testValidateIsNoopWithoutBillingCountry(): void
     {
         $this->customerManagement->expects(static::never())->method('validateAddresses');
+        $this->logger->expects(static::once())->method('debug')
+            ->with('Validate: address check skipped, no billing address country');
 
         $this->model->validate(new DataObject(), $this->createQuote(null, null));
     }
