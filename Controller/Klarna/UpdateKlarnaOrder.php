@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Klarna\Kco\Controller\Klarna;
 
 use Exception;
+use Klarna\Kco\Api\QuoteRepositoryInterface;
 use Klarna\Kco\Exception\CheckoutLockedException;
 use Klarna\Kco\Model\Checkout\MutationGuard;
 use Klarna\Kco\Model\Responder\Ajax;
@@ -17,6 +18,7 @@ use Klarna\Kco\Model\Checkout\Kco\Initializer;
 use Klarna\Logger\Api\LoggerInterface;
 use Magento\Framework\App\Action\HttpPostActionInterface;
 use Magento\Framework\App\ObjectManager;
+use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Framework\Message\ManagerInterface;
 use Magento\Framework\Controller\Result\Json;
 use Magento\Framework\Controller\ResultInterface;
@@ -48,13 +50,18 @@ class UpdateKlarnaOrder implements HttpPostActionInterface
      * @var MutationGuard
      */
     private MutationGuard $mutationGuard;
+    /**
+     * @var QuoteRepositoryInterface
+     */
+    private QuoteRepositoryInterface $klarnaQuoteRepository;
 
     /**
-     * @param LoggerInterface     $logger
-     * @param Initializer         $initializer
-     * @param ManagerInterface    $manager
-     * @param Ajax                $ajax
-     * @param MutationGuard|null  $mutationGuard
+     * @param LoggerInterface $logger
+     * @param Initializer $initializer
+     * @param ManagerInterface $manager
+     * @param Ajax $ajax
+     * @param MutationGuard|null $mutationGuard
+     * @param QuoteRepositoryInterface|null $klarnaQuoteRepository
      * @codeCoverageIgnore
      */
     public function __construct(
@@ -62,13 +69,16 @@ class UpdateKlarnaOrder implements HttpPostActionInterface
         Initializer $initializer,
         ManagerInterface $manager,
         Ajax $ajax,
-        ?MutationGuard $mutationGuard = null
+        ?MutationGuard $mutationGuard = null,
+        ?QuoteRepositoryInterface $klarnaQuoteRepository = null
     ) {
         $this->logger         = $logger;
         $this->initializer    = $initializer;
         $this->manager        = $manager;
         $this->ajax           = $ajax;
         $this->mutationGuard  = $mutationGuard ?: ObjectManager::getInstance()->get(MutationGuard::class);
+        $this->klarnaQuoteRepository = $klarnaQuoteRepository
+            ?: ObjectManager::getInstance()->get(QuoteRepositoryInterface::class);
     }
 
     /**
@@ -79,22 +89,7 @@ class UpdateKlarnaOrder implements HttpPostActionInterface
     public function execute()
     {
         try {
-            return $this->executeGuarded();
-        } finally {
-            // KUSTOM-128: the guard keeps the order creation lock until here
-            $this->mutationGuard->releaseAll();
-        }
-    }
-
-    /**
-     * Run the action
-     *
-     * @return mixed
-     */
-    private function executeGuarded()
-    {
-        try {
-            $kustomId = (string) $this->initializer->getKcoSession()->getKlarnaQuote()->getKlarnaCheckoutId();
+            $kustomId = $this->getKustomId($this->initializer->getKcoSession()->getQuote());
             if ($kustomId !== '') {
                 $this->mutationGuard->guardFrontend($kustomId);
             }
@@ -112,6 +107,25 @@ class UpdateKlarnaOrder implements HttpPostActionInterface
             return $this->ajax->getSummaryResponse([
                 'error' => true
             ]);
+        }
+    }
+
+    /**
+     * Kustom checkout id of the active Kustom quote, empty if there is none (no row is created)
+     *
+     * @param \Magento\Quote\Api\Data\CartInterface|null $quote
+     * @return string
+     */
+    private function getKustomId($quote): string
+    {
+        if ($quote === null) {
+            return '';
+        }
+
+        try {
+            return (string) $this->klarnaQuoteRepository->getActiveByQuote($quote)->getKlarnaCheckoutId();
+        } catch (NoSuchEntityException $e) {
+            return '';
         }
     }
 }

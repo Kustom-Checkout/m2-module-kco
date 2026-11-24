@@ -159,15 +159,61 @@ class SaveShippingMethodTest extends AbstractController
     }
 
     /**
+     * Saving the method the quote already has is a no-op, it is allowed inside the window (page reload)
+     *
+     * @magentoAppArea frontend
+     * @magentoAppIsolation enabled
+     * @magentoDbIsolation enabled
+     * @magentoConfigFixture current_store payment/klarna_kco/active 1
+     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/quote_setup1_single_simple_product.php
+     */
+    public function testSameMethodInsideWindowIsAllowed(): void
+    {
+        $this->setMarker(gmdate('Y-m-d H:i:s', time() - 10));
+        $this->checkoutMock->expects($this->never())->method('getOrder');
+
+        $this->dispatchSave(self::ORIGINAL_METHOD);
+
+        $this->assertEquals(self::ORIGINAL_METHOD, $this->loadShippingMethod());
+        $body = json_decode($this->getResponse()->getBody(), true);
+        $this->assertFalse($body['locked'] ?? false);
+    }
+
+    /**
+     * The guard must not create a Kustom quote row when there is none
+     *
+     * @magentoAppArea frontend
+     * @magentoAppIsolation enabled
+     * @magentoDbIsolation enabled
+     * @magentoConfigFixture current_store payment/klarna_kco/active 1
+     * @magentoConfigFixture current_store carriers/freeshipping/active 1
+     * @magentoConfigFixture current_store carriers/freeshipping/free_shipping_subtotal 0
+     * @magentoDataFixture Klarna_Base::Test/Integration/_files/fixtures/quote_setup1_single_simple_product.php
+     */
+    public function testNoKustomQuoteRowIsCreatedByTheGuard(): void
+    {
+        $resource = $this->_objectManager->get(\Magento\Framework\App\ResourceConnection::class);
+        $connection = $resource->getConnection();
+        $table = $resource->getTableName('klarna_kco_quote');
+        $connection->delete($table);
+
+        $this->dispatchSave();
+
+        $this->assertEquals(0, (int) $connection->fetchOne('SELECT COUNT(*) FROM ' . $table));
+        $this->assertEquals(self::NEW_METHOD, $this->loadShippingMethod());
+    }
+
+    /**
+     * @param string $method
      * @return void
      */
-    private function dispatchSave(): void
+    private function dispatchSave(string $method = self::NEW_METHOD): void
     {
         $quote = $this->_objectManager->get(GetQuoteByReservedOrderId::class)->execute('100000001');
         $this->quoteId = (int) $quote->getId();
         $this->_objectManager->get(CheckoutSession::class)->replaceQuote($quote);
 
-        [$carrier, $method] = explode('_', self::NEW_METHOD);
+        [$carrier, $method] = explode('_', $method);
         $this->getRequest()->setMethod(Http::METHOD_POST);
         $this->getRequest()->setContent(json_encode(['carrier_code' => $carrier, 'method_code' => $method]));
         $this->dispatch('checkout/klarna/saveShippingMethod');

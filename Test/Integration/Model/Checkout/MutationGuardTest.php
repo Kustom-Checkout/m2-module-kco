@@ -14,17 +14,13 @@ use Klarna\Kco\Model\Checkout\ValidatedMarker;
 use Klarna\Kco\Exception\CheckoutLockedException;
 use Klarna\Kco\Model\Api\Rest\Service\Checkout;
 use Klarna\Kco\Model\Checkout\MutationGuard;
-use Klarna\Kco\Model\Order\CreationLock;
 use Klarna\Kco\Model\Order\Order as CheckoutOrder;
-use Magento\Framework\App\DeploymentConfig;
-use Magento\Framework\App\ResourceConnection;
-use Magento\Framework\Lock\Backend\Database;
 use Magento\TestFramework\Helper\Bootstrap;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 
 /**
- * KUSTOM-128: the guard which protects the quote between validate and order creation
+ * KUSTOM-128: the guard which protects the quote between validate and order creation (page changes only)
  *
  * @magentoAppIsolation enabled
  * @magentoDbIsolation enabled
@@ -49,30 +45,12 @@ class MutationGuardTest extends TestCase
      */
     private $quoteRepository;
 
-    /**
-     * @var CreationLock
-     */
-    private $guardLock;
-
-    /**
-     * @var CreationLock
-     */
-    private $otherRequestLock;
-
     protected function setUp(): void
     {
         $this->checkoutApi = $this->createMock(Checkout::class);
         $this->checkoutOrder = $this->createMock(CheckoutOrder::class);
         $this->checkoutOrder->method('isMagentoOrderExists')->willReturn(false);
         $this->quoteRepository = Bootstrap::getObjectManager()->get(QuoteRepositoryInterface::class);
-        $this->guardLock = $this->createLockWithOwnConnection();
-        $this->otherRequestLock = $this->createLockWithOwnConnection();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->otherRequestLock->release(self::CHECKOUT_ID);
-        $this->guardLock->release(self::CHECKOUT_ID);
     }
 
     public function testFrontendAllowedWithoutMarkerAndWithoutApiCall(): void
@@ -128,125 +106,45 @@ class MutationGuardTest extends TestCase
         $order->method('isMagentoOrderExists')->willReturn(true);
         $this->checkoutApi->expects($this->never())->method('getOrder');
 
-        foreach (['guardFrontend', 'guardKustomCallback', 'guardIframeChange'] as $method) {
-            try {
-                $this->createGuard($order)->$method(self::CHECKOUT_ID);
-                $this->fail($method . ' must refuse');
-            } catch (CheckoutLockedException $e) {
-                $this->assertStringContainsString('Your payment is being processed', $e->getMessage());
-            }
-        }
+        $this->expectException(CheckoutLockedException::class);
+        $this->expectExceptionMessage('Your payment is being processed');
+        $this->createGuard($order)->guardFrontend(self::CHECKOUT_ID);
     }
 
-    public function testRefusedWhenOrderCreationHoldsTheLock(): void
+    public function testRefusedWhenStatusIsUnexpected(): void
     {
-        $this->assertTrue($this->otherRequestLock->acquire(self::CHECKOUT_ID, 0));
-        $this->checkoutApi->expects($this->never())->method('getOrder');
+        $this->setMarker(gmdate('Y-m-d H:i:s', time() - 400));
+        $this->checkoutApi->method('getOrder')->willReturn(['status' => 'something_else']);
 
         $this->expectException(CheckoutLockedException::class);
-        $this->createGuard()->guardKustomCallback(self::CHECKOUT_ID);
+        $this->createGuard()->guardFrontend(self::CHECKOUT_ID);
     }
 
-    public function testLockIsHeldAfterAnAllowedCheckUntilReleased(): void
-    {
-        $guard = $this->createGuard();
-        $guard->guardFrontend(self::CHECKOUT_ID);
-
-        $this->assertFalse($this->otherRequestLock->acquire(self::CHECKOUT_ID, 0));
-
-        $guard->release(self::CHECKOUT_ID);
-        $guard->release(self::CHECKOUT_ID);
-        $this->assertTrue($this->otherRequestLock->acquire(self::CHECKOUT_ID, 0));
-    }
-
-    public function testReleaseAllReleasesEveryLockTheGuardHolds(): void
-    {
-        $otherId = '654321-4321-4321-4321-0987654321';
-        $guard = $this->createGuard();
-        $guard->guardFrontend(self::CHECKOUT_ID);
-        $guard->guardFrontend($otherId);
-        $this->assertFalse($this->otherRequestLock->acquire(self::CHECKOUT_ID, 0));
-        $this->assertFalse($this->otherRequestLock->acquire($otherId, 0));
-
-        $guard->releaseAll();
-        $guard->releaseAll();
-
-        $this->assertTrue($this->otherRequestLock->acquire(self::CHECKOUT_ID, 0));
-        $this->assertTrue($this->otherRequestLock->acquire($otherId, 0));
-        $this->otherRequestLock->release($otherId);
-    }
-
-    public function testLockIsReleasedOnRefusal(): void
+    public function testUnexpectedErrorInsideTheGuardFailsOpen(): void
     {
         $this->setMarker(gmdate('Y-m-d H:i:s', time() - 10));
+        $order = $this->createMock(CheckoutOrder::class);
+        $order->method('isMagentoOrderExists')->willThrowException(new \RuntimeException('db down'));
 
-        try {
-            $this->createGuard()->guardFrontend(self::CHECKOUT_ID);
-            $this->fail('must refuse');
-        } catch (CheckoutLockedException $e) {
-            $this->assertTrue($this->otherRequestLock->acquire(self::CHECKOUT_ID, 0));
-        }
+        $this->createGuard($order)->guardFrontend(self::CHECKOUT_ID);
+
+        $this->addToAssertionCount(1);
     }
 
-    public function testReleaseDoesNotReleaseALockOfAnotherRequest(): void
+    public function testClearMarkerFailureFailsOpen(): void
     {
-        $this->assertTrue($this->otherRequestLock->acquire(self::CHECKOUT_ID, 0));
-
-        $this->createGuard()->release(self::CHECKOUT_ID);
-
-        $this->assertFalse($this->guardLock->acquire(self::CHECKOUT_ID, 0));
-    }
-
-    public function testClearMarkerFailureDoesNotRefuseTheKustomCallback(): void
-    {
-        $this->setMarker(gmdate('Y-m-d H:i:s', time() - 10));
+        $this->setMarker(gmdate('Y-m-d H:i:s', time() - 400));
+        $this->checkoutApi->method('getOrder')->willReturn(['status' => 'checkout_incomplete']);
         $marker = $this->createMock(ValidatedMarker::class);
         $marker->method('update')->willThrowException(new \RuntimeException('db down'));
 
         Bootstrap::getObjectManager()->create(MutationGuard::class, [
             'checkoutOrder' => $this->checkoutOrder,
             'checkoutApi' => $this->checkoutApi,
-            'creationLock' => $this->guardLock,
             'validatedMarker' => $marker,
-        ])->guardKustomCallback(self::CHECKOUT_ID);
+        ])->guardFrontend(self::CHECKOUT_ID);
 
         $this->addToAssertionCount(1);
-    }
-
-    public function testKustomCallbackClearsMarkerInsideWindow(): void
-    {
-        $this->setMarker(gmdate('Y-m-d H:i:s', time() - 10));
-        $this->checkoutApi->expects($this->never())->method('getOrder');
-
-        $this->createGuard()->guardKustomCallback(self::CHECKOUT_ID);
-        $this->assertNull($this->quoteRepository->getByCheckoutId(self::CHECKOUT_ID)->getValidatedAt());
-    }
-
-    public function testIframeChangeAllowedInsideWindowAndClearsMarkerWithoutApiCall(): void
-    {
-        $this->setMarker(gmdate('Y-m-d H:i:s', time() - 10));
-        $this->checkoutApi->expects($this->never())->method('getOrder');
-
-        $this->createGuard()->guardIframeChange(self::CHECKOUT_ID);
-        $this->assertNull($this->quoteRepository->getByCheckoutId(self::CHECKOUT_ID)->getValidatedAt());
-    }
-
-    public function testIframeChangeKeepsTheLockUntilReleased(): void
-    {
-        $guard = $this->createGuard();
-        $guard->guardIframeChange(self::CHECKOUT_ID);
-        $this->assertFalse($this->otherRequestLock->acquire(self::CHECKOUT_ID, 0));
-
-        $guard->releaseAll();
-        $this->assertTrue($this->otherRequestLock->acquire(self::CHECKOUT_ID, 0));
-    }
-
-    public function testIframeChangeRefusedWhenOrderCreationHoldsTheLock(): void
-    {
-        $this->assertTrue($this->otherRequestLock->acquire(self::CHECKOUT_ID, 0));
-
-        $this->expectException(CheckoutLockedException::class);
-        $this->createGuard()->guardIframeChange(self::CHECKOUT_ID);
     }
 
     private function createGuard(?CheckoutOrder $order = null): MutationGuard
@@ -254,26 +152,11 @@ class MutationGuardTest extends TestCase
         return Bootstrap::getObjectManager()->create(MutationGuard::class, [
             'checkoutOrder' => $order ?: $this->checkoutOrder,
             'checkoutApi' => $this->checkoutApi,
-            'creationLock' => $this->guardLock,
         ]);
     }
 
     private function setMarker(string $validatedAt): void
     {
         Bootstrap::getObjectManager()->get(ValidatedMarker::class)->update(self::CHECKOUT_ID, $validatedAt);
-    }
-
-    /**
-     * The test framework replaces the locker by a dummy, so a real database locker with its own connection is used
-     */
-    private function createLockWithOwnConnection(): CreationLock
-    {
-        $objectManager = Bootstrap::getObjectManager();
-        $locker = new Database(
-            $objectManager->create(ResourceConnection::class),
-            $objectManager->get(DeploymentConfig::class)
-        );
-
-        return new CreationLock($locker);
     }
 }

@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Kustom AB
+ * Copyright © Klarna Bank AB (publ)
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -10,9 +10,7 @@ declare(strict_types=1);
 namespace Klarna\Kco\Controller\Api;
 
 use Klarna\Kco\Api\ApiInterface;
-use Klarna\Kco\Exception\CheckoutLockedException;
 use Klarna\Kco\Model\Cart\FullUpdate;
-use Klarna\Kco\Model\Checkout\MutationGuard;
 use Klarna\Kco\Model\WorkflowProvider;
 use Klarna\Logger\Model\Api\Container;
 use Klarna\Logger\Api\LoggerInterface;
@@ -22,7 +20,6 @@ use Klarna\Kco\Model\Checkout\Kco\Initializer as KcoInitializer;
 use Klarna\Kco\Model\Responder\Klarna;
 use Klarna\Logger\Model\Api\Logger;
 use Magento\Framework\App\Action\HttpPostActionInterface;
-use Magento\Framework\App\ObjectManager;
 use Magento\Framework\App\RequestInterface;
 use Magento\Framework\Controller\Result\Json;
 use Magento\Framework\Exception\LocalizedException;
@@ -70,10 +67,6 @@ class AddressUpdate extends CsrfAbstract implements HttpPostActionInterface
      * @var RequestInterface
      */
     private RequestInterface $request;
-    /**
-     * @var MutationGuard
-     */
-    private MutationGuard $mutationGuard;
 
     /**
      * @param LoggerInterface $logger
@@ -85,7 +78,6 @@ class AddressUpdate extends CsrfAbstract implements HttpPostActionInterface
      * @param WorkflowProvider $workflowProvider
      * @param FullUpdate $fullUpdate
      * @param RequestInterface $request
-     * @param MutationGuard|null $mutationGuard
      * @SuppressWarnings(PHPMD.ExcessiveParameterList)
      * @codeCoverageIgnore
      */
@@ -98,8 +90,7 @@ class AddressUpdate extends CsrfAbstract implements HttpPostActionInterface
         Container $container,
         WorkflowProvider $workflowProvider,
         FullUpdate $fullUpdate,
-        RequestInterface $request,
-        ?MutationGuard $mutationGuard = null
+        RequestInterface $request
     ) {
         $this->kcoInitializer = $kcoInitializer;
         $this->logger = $logger;
@@ -110,7 +101,6 @@ class AddressUpdate extends CsrfAbstract implements HttpPostActionInterface
         $this->workflowProvider = $workflowProvider;
         $this->fullUpdate = $fullUpdate;
         $this->request = $request;
-        $this->mutationGuard = $mutationGuard ?: ObjectManager::getInstance()->get(MutationGuard::class);
     }
 
     /**
@@ -120,26 +110,10 @@ class AddressUpdate extends CsrfAbstract implements HttpPostActionInterface
      */
     public function execute()
     {
-        try {
-            return $this->executeGuarded();
-        } finally {
-            // KUSTOM-128: the guard keeps the order creation lock until here
-            $this->mutationGuard->releaseAll();
-        }
-    }
-
-    /**
-     * Run the action
-     *
-     * @return mixed
-     */
-    private function executeGuarded()
-    {
         $this->logger->info('AddressUpdate: start');
         $this->container->setService(ServiceInterface::SERVICE_KCO);
 
         try {
-            $this->mutationGuard->guardKustomCallback($this->getKlarnaOrderId());
             $this->logger->info('AddressUpdate: updated the address');
             $this->workflowProvider->setKlarnaOrderId($this->getKlarnaOrderId());
 
@@ -148,11 +122,6 @@ class AddressUpdate extends CsrfAbstract implements HttpPostActionInterface
                 $this->getKlarnaOrderId(),
                 $this->workflowProvider->getMagentoQuote()
             );
-        } catch (CheckoutLockedException $e) {
-            // KUSTOM-128: no quote change, same error path as any other failure of this callback
-            $this->logCallbackException($e);
-            $this->logger->warning('AddressUpdate: refused, ' . $e->getMessage());
-            return $this->klarna->getAddressErrorResponse($e->getMessage(), 400);
         } catch (\Exception $e) {
             $this->logCallbackException($e);
             return $this->getErrorResponseWithStatusCode($e, 400);

@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Copyright © Kustom AB
+ * Copyright © Klarna Bank AB (publ)
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -13,8 +13,6 @@ namespace Klarna\Kco\Controller\Api;
 
 use Klarna\Base\Api\ServiceInterface;
 use Klarna\Kco\Api\ApiInterface;
-use Klarna\Kco\Exception\CheckoutLockedException;
-use Klarna\Kco\Model\Checkout\MutationGuard;
 use Klarna\Kco\Model\Cart\ShippingMethod\KlarnaRequestQuoteTransformer;
 use Klarna\Logger\Model\Api\Logger;
 use Klarna\Logger\Model\Api\Container;
@@ -84,11 +82,6 @@ class ShippingMethodUpdate extends CsrfAbstract implements HttpPostActionInterfa
     private ?ShippingMethodUpdateInterface $methodUpdater;
 
     /**
-     * @var MutationGuard
-     */
-    private MutationGuard $mutationGuard;
-
-    /**
      * @param LoggerInterface $logger
      * @param kcoInitializer $kcoInitializer
      * @param Result $result
@@ -98,7 +91,6 @@ class ShippingMethodUpdate extends CsrfAbstract implements HttpPostActionInterfa
      * @param KlarnaRequestQuoteTransformer $klarnaRequestQuoteTransformer
      * @param RequestInterface $request
      * @param ShippingMethodUpdateInterface|null $methodUpdater
-     * @param MutationGuard|null $mutationGuard
      * @SuppressWarnings(PHPMD.ExcessiveParameterList)
      */
     public function __construct(
@@ -110,8 +102,7 @@ class ShippingMethodUpdate extends CsrfAbstract implements HttpPostActionInterfa
         Container $container,
         KlarnaRequestQuoteTransformer $klarnaRequestQuoteTransformer,
         RequestInterface $request,
-        ?ShippingMethodUpdateInterface $methodUpdater = null,
-        ?MutationGuard $mutationGuard = null
+        ?ShippingMethodUpdateInterface $methodUpdater = null
     ) {
         $this->logger = $logger;
         $this->kcoInitializer = $kcoInitializer;
@@ -126,8 +117,6 @@ class ShippingMethodUpdate extends CsrfAbstract implements HttpPostActionInterfa
 
         // TODO: Remove OM usage in next major release, done for backwards compatibility
         $this->methodUpdater = $methodUpdater ?: ObjectManager::getInstance()->get(ShippingMethodUpdateInterface::class);
-        $this->mutationGuard = $mutationGuard
-            ?: ObjectManager::getInstance()->get(MutationGuard::class);
     }
 
     /**
@@ -138,33 +127,13 @@ class ShippingMethodUpdate extends CsrfAbstract implements HttpPostActionInterfa
      */
     public function execute()
     {
-        try {
-            return $this->executeGuarded();
-        } finally {
-            // KUSTOM-128: the guard keeps the order creation lock until here
-            $this->mutationGuard->releaseAll();
-        }
-    }
-
-    /**
-     * Run the action
-     *
-     * @return mixed
-     */
-    private function executeGuarded()
-    {
         $this->logger->info('ShippingMethodUpdate: start');
 
         $klarnaOrderId = $this->request->getParam('id');
         $this->logger->info('ShippingMethodUpdate: Kustom order id: ' . $klarnaOrderId);
 
         try {
-            $this->mutationGuard->guardKustomCallback((string) $klarnaOrderId);
             $this->methodUpdater->updateByRequest($this->request);
-        } catch (CheckoutLockedException $e) {
-            // KUSTOM-128: no quote change, same error path as a failed update
-            $this->logCallbackException($e);
-            return $this->getFailureResult($e->getMessage(), 400);
         } catch (LocalizedException $e) {
             $this->logCallbackException($e);
             $this->logger->error('ShippingMethodUpdate error: ' . $e->getTraceAsString());
