@@ -1,18 +1,17 @@
 # Changelog
 
-## 12.4.5 / 2026-11-24
+## 12.4.5 / 2026-11-20
 
 ### Breaking changes
 * None
 
 ### Features / changes
 * KUSTOM-128: New nullable column `klarna_kco_quote.validated_at`; run `bin/magento setup:upgrade` after updating
-* KUSTOM-127, KUSTOM-128, KUSTOM-129: klarna.log shows the address check result, whether the validated shipping rate was reused, the validated marker and every refused checkout-page change
 
 ### Fixes
 * KUSTOM-129: Addresses Magento cannot save are now rejected in the validate callback, so the customer can correct them before paying
 * KUSTOM-127: Push and confirmation reuse the shipping rate accepted in the validate callback instead of collecting carrier rates again after payment
-* KUSTOM-128: For 5 minutes after a successful validate, and once the order exists, shipping method changes and order updates from the checkout page are refused with a message; changes inside the Kustom checkout are not affected
+* KUSTOM-128: For 5 minutes after a successful validate, and once the order exists, shipping method changes and order updates from the Magento checkout page are refused with a message, so the quote cannot change before the order is created; changes inside the Kustom checkout are not affected
 
 ## 12.4.4 / 2026-10-12
 
