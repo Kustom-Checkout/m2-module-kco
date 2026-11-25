@@ -1,6 +1,6 @@
 # Changelog
 
-## 12.4.5 / 2026-11-20
+## 12.4.5 / 2026-11-25
 
 ### Breaking changes
 * None
