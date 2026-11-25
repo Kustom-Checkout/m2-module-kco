@@ -116,6 +116,8 @@ class FullUpdateTest extends TestCase
 
     /**
      * @covers ::updateByKlarnaRequestObject
+     * @dataProvider reusedStatusProvider
+     * @param string $status
      */
     #[DataProvider('reusedStatusProvider')]
     public function testStatusIsComparedCaseInsensitively(string $status): void
@@ -247,6 +249,8 @@ class FullUpdateTest extends TestCase
 
     /**
      * @covers ::updateByKlarnaRequestObject
+     * @dataProvider notCompletedProvider
+     * @param string|null $status
      */
     #[DataProvider('notCompletedProvider')]
     public function testNotCompletedOrderCollectsRates(?string $status): void
