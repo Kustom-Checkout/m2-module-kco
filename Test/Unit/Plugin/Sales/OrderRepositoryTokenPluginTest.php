@@ -12,6 +12,7 @@ namespace Klarna\Kco\Test\Unit\Plugin\Sales;
 use Klarna\Kco\Api\CustomerTokenRepositoryInterface;
 use Klarna\Kco\Api\Data\CustomerTokenInterface;
 use Klarna\Kco\Plugin\Sales\OrderRepositoryTokenPlugin;
+use Klarna\Logger\Api\LoggerInterface;
 use Magento\Sales\Api\Data\OrderInterface;
 use Magento\Sales\Api\Data\OrderPaymentInterface;
 use Magento\Sales\Api\Data\OrderSearchResultInterface;
@@ -25,13 +26,16 @@ class OrderRepositoryTokenPluginTest extends TestCase
     private $tokenRepository;
     /** @var OrderRepositoryInterface&MockObject */
     private $subject;
+    /** @var LoggerInterface&MockObject */
+    private $logger;
     private OrderRepositoryTokenPlugin $plugin;
 
     protected function setUp(): void
     {
         $this->tokenRepository = $this->createMock(CustomerTokenRepositoryInterface::class);
         $this->subject = $this->createMock(OrderRepositoryInterface::class);
-        $this->plugin = new OrderRepositoryTokenPlugin($this->tokenRepository);
+        $this->logger = $this->createMock(LoggerInterface::class);
+        $this->plugin = new OrderRepositoryTokenPlugin($this->tokenRepository, $this->logger);
     }
 
     /**
@@ -68,6 +72,7 @@ class OrderRepositoryTokenPluginTest extends TestCase
     {
         [$order, $extension] = $this->order(5);
         $this->tokenRepository->method('getListByOrderIds')->willThrowException(new \RuntimeException('db down'));
+        $this->logger->expects($this->atLeastOnce())->method('warning')->with($this->stringContains('db down'));
 
         $this->assertSame($order, $this->plugin->afterGet($this->subject, $order));
         $this->assertSame(0, $extension->calls);
@@ -77,6 +82,7 @@ class OrderRepositoryTokenPluginTest extends TestCase
     {
         [$o1, $e1] = $this->order(1);
         $this->tokenRepository->method('getListByOrderIds')->willThrowException(new \RuntimeException('db down'));
+        $this->logger->expects($this->atLeastOnce())->method('warning')->with($this->stringContains('db down'));
         $result = $this->createMock(OrderSearchResultInterface::class);
         $result->method('getItems')->willReturn([$o1]);
 

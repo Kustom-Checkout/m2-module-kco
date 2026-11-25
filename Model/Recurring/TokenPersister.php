@@ -116,7 +116,10 @@ class TokenPersister
             ->setStatus(CustomerTokenInterface::STATUS_ACTIVE)
             ->setPaymentMethodType(null);
 
-        $this->repository->saveIfNotExists($customerToken);
+        if ($this->repository->saveIfNotExists($customerToken) === $customerToken) {
+            // Ids only, never the token. A repeated confirmation or push finds the stored row and logs nothing.
+            $this->logger->info(sprintf('Recurring token stored for Kustom order %s', $kustomOrderId));
+        }
     }
 
     /**

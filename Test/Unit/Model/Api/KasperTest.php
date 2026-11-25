@@ -141,7 +141,9 @@ class KasperTest extends TestCase
                 $this->checkoutMock,
                 $this->dataObjectFactory,
                 $this->kasperBuilder,
-                []
+                [],
+                $this->createMock(\Klarna\Logger\Api\LoggerInterface::class),
+                $this->createMock(\Klarna\AdminSettings\Model\Configurations\Api::class)
             ])
             ->onlyMethods([
                 'getGeneratedCreateRequest',

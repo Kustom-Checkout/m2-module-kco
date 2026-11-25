@@ -11,6 +11,7 @@ namespace Klarna\Kco\Plugin\Sales;
 
 use Klarna\Kco\Api\CustomerTokenRepositoryInterface;
 use Klarna\Kco\Model\Payment\Kco;
+use Klarna\Logger\Api\LoggerInterface;
 use Magento\Sales\Api\Data\OrderInterface;
 use Magento\Sales\Api\Data\OrderSearchResultInterface;
 use Magento\Sales\Api\OrderRepositoryInterface;
@@ -33,14 +34,20 @@ class OrderRepositoryTokenPlugin
      * @var CustomerTokenRepositoryInterface
      */
     private CustomerTokenRepositoryInterface $tokenRepository;
+    /**
+     * @var LoggerInterface
+     */
+    private LoggerInterface $logger;
 
     /**
      * @param CustomerTokenRepositoryInterface $tokenRepository
+     * @param LoggerInterface                  $logger
      * @codeCoverageIgnore
      */
-    public function __construct(CustomerTokenRepositoryInterface $tokenRepository)
+    public function __construct(CustomerTokenRepositoryInterface $tokenRepository, LoggerInterface $logger)
     {
         $this->tokenRepository = $tokenRepository;
+        $this->logger = $logger;
     }
 
     /**
@@ -97,7 +104,7 @@ class OrderRepositoryTokenPlugin
     }
 
     /**
-     * Load the tokens; any failure leaves the attribute null (silent, nothing about the token is exposed)
+     * Load the tokens; any failure leaves the attribute null and is logged (the token itself is never logged)
      *
      * @param int[] $orderIds
      * @return array
@@ -107,6 +114,12 @@ class OrderRepositoryTokenPlugin
         try {
             return $this->tokenRepository->getListByOrderIds($orderIds);
         } catch (\Throwable $e) {
+            $this->logger->warning(sprintf(
+                'Recurring token could not be loaded for order ids %s: %s: %s',
+                implode(',', $orderIds),
+                get_class($e),
+                $e->getMessage()
+            ));
             return [];
         }
     }

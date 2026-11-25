@@ -264,7 +264,12 @@ class Order
             $this->klarnaOrder,
             $klarnaApiOrder
         );
-        $this->logger->debug('Created the shop order');
+        $this->logger->info(sprintf(
+            'Created the shop order, increment id: %s, Kustom order id: %s, recurring: %s',
+            (string)$this->mageOrder->getIncrementId(),
+            (string)$klarnaOrderId,
+            $klarnaApiOrder->getData('recurring') === true ? 'yes' : 'no'
+        ));
 
         $reservationId = $this->initializer->getReservationId($this->mageQuote->getStore());
 

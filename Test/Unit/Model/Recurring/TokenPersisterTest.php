@@ -64,6 +64,11 @@ class TokenPersisterTest extends TestCase
                 return $token;
             });
         $this->logger->expects(static::never())->method('warning');
+        $this->logger->expects(static::once())->method('info')
+            ->with(static::logicalAnd(
+                static::stringContains('K-1'),
+                static::logicalNot(static::stringContains(self::SECRET))
+            ));
 
         $this->model->persist($this->checkout(true, self::SECRET), $this->order(12), 'MID_1');
 
@@ -76,6 +81,18 @@ class TokenPersisterTest extends TestCase
         static::assertSame('MID_1', $saved->getMerchantId());
         static::assertSame('active', $saved->getStatus());
         static::assertNull($saved->getPaymentMethodType());
+    }
+
+    /**
+     * @covers ::persist
+     */
+    public function testAlreadyStoredTokenIsNotLoggedAgain(): void
+    {
+        $this->repository->expects(static::once())->method('saveIfNotExists')
+            ->willReturn($this->createMock(CustomerToken::class));
+        $this->logger->expects(static::never())->method('info');
+
+        $this->model->persist($this->checkout(true, self::SECRET), $this->order(12), 'MID_1');
     }
 
     /**

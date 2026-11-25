@@ -74,7 +74,7 @@ class OrderRecurringTokenTest extends TestCase
         $criteriaBuilder->method('addFilter')->willReturnSelf();
         $criteriaBuilder->method('create')->willReturn($this->createMock(SearchCriteria::class));
 
-        $checkout = new DataObject(['status' => 'checkout_complete', 'order_id' => 'kustom-1']);
+        $checkout = new DataObject(['status' => 'checkout_complete', 'order_id' => 'kustom-1', 'recurring' => true]);
         $initializer = $this->createMock(Initializer::class);
         $initializer->method('getKlarnaCheckout')->willReturn($checkout);
         $initializer->method('getReservationId')->willReturn('reservation-1');
@@ -98,6 +98,11 @@ class OrderRecurringTokenTest extends TestCase
             )
         );
 
+        $infoLines = [];
+        $logger->method('info')->willReturnCallback(function (string $message) use (&$infoLines): void {
+            $infoLines[] = $message;
+        });
+
         $kcoSession = $this->createMock(KcoSession::class);
         $kcoSession->method('getKlarnaQuote')->willReturn($this->createMock(QuoteInterface::class));
 
@@ -120,5 +125,9 @@ class OrderRecurringTokenTest extends TestCase
         );
 
         $this->assertSame($mageOrder, $model->createMagentoOrder('kustom-1'));
+        $this->assertContains(
+            'Created the shop order, increment id: 000000042, Kustom order id: kustom-1, recurring: yes',
+            $infoLines
+        );
     }
 }
