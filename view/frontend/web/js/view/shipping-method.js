@@ -1,5 +1,5 @@
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -18,7 +18,8 @@ define([
     'Klarna_Kco/js/model/shipping-method-resolver',
     'Klarna_Kco/js/action/select-shipping-method',
     'mage/storage',
-    'Klarna_Kco/js/action/update-klarna-order'
+    'Klarna_Kco/js/action/update-klarna-order',
+    'Magento_Ui/js/model/messageList'
 ], function (
     $,
     _,
@@ -33,7 +34,8 @@ define([
     kcoShippingMethodResolver,
     kcoShippingMethod,
     storage,
-    updateKlarnaOrder
+    updateKlarnaOrder,
+    messageList
 ) {
     'use strict';
 
@@ -88,12 +90,36 @@ define([
                 return true;
             }
 
+            var previousMethod = quote.shippingMethod();
+
             kcoShippingMethod(shippingMethod);
             updateInProgress(true);
 
-            storage.post(config.methodUrl, JSON.stringify(shippingMethod)).done(function () {
+            storage.post(config.methodUrl, JSON.stringify(shippingMethod)).done(function (response) {
                 updateInProgress(false);
-                updateKlarnaOrder();
+
+                if (response && response.locked) {
+                    // KUSTOM-128: refused (payment in progress or order created): show the message and put the
+                    // previously selected method back, the quote on the server was not changed
+                    if (response.message) {
+                        messageList.addErrorMessage({message: response.message});
+                    }
+                    if (previousMethod && previousMethod['carrier_code']) {
+                        selectShippingMethodAction(previousMethod);
+                        checkoutData.setSelectedShippingRate(
+                            previousMethod['carrier_code'] + '_' + previousMethod['method_code']
+                        );
+                    }
+
+                    return;
+                }
+
+                if (!previousMethod ||
+                    previousMethod['carrier_code'] !== shippingMethod['carrier_code'] ||
+                    previousMethod['method_code'] !== shippingMethod['method_code']
+                ) {
+                    updateKlarnaOrder();
+                }
             });
 
             return true;

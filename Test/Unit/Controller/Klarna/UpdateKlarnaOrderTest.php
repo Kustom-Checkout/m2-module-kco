@@ -9,7 +9,10 @@ declare(strict_types=1);
 
 namespace Klarna\Kco\Test\Unit\Controller\Klarna;
 
+use Klarna\Kco\Api\QuoteRepositoryInterface;
 use Klarna\Kco\Controller\Klarna\UpdateKlarnaOrder;
+use Klarna\Kco\Exception\CheckoutLockedException;
+use Klarna\Kco\Model\Checkout\MutationGuard;
 use Klarna\Kco\Model\Checkout\Kco\Initializer;
 use Klarna\Kco\Model\Checkout\Kco\Session;
 use Klarna\Kco\Model\Quote;
@@ -46,6 +49,14 @@ class UpdateKlarnaOrderTest extends TestCase
      * @var UpdateKlarnaOrder
      */
     private UpdateKlarnaOrder $controller;
+    /**
+     * @var MutationGuard|MockObject
+     */
+    private $mutationGuard;
+    /**
+     * @var Quote|MockObject
+     */
+    private $klarnaQuote;
 
     protected function setUp(): void
     {
@@ -56,18 +67,23 @@ class UpdateKlarnaOrderTest extends TestCase
         $klarnaQuote->method('getData')->willReturnCallback(
             fn () => array_shift($this->recurring)
         );
+        $this->klarnaQuote = $klarnaQuote;
         $session = $this->createMock(Session::class);
         $session->method('getKlarnaQuote')->willReturn($klarnaQuote);
+        $session->method('getQuote')->willReturn(null);
 
         $this->initializer = $this->createMock(Initializer::class);
         $this->initializer->method('getKcoSession')->willReturn($session);
         $this->ajax = $this->createMock(Ajax::class);
+        $this->mutationGuard = $this->createMock(MutationGuard::class);
 
         $this->controller = new UpdateKlarnaOrder(
             $this->createMock(LoggerInterface::class),
             $this->initializer,
             $this->createMock(ManagerInterface::class),
-            $this->ajax
+            $this->ajax,
+            $this->mutationGuard,
+            $this->createMock(QuoteRepositoryInterface::class)
         );
     }
 
@@ -117,5 +133,40 @@ class UpdateKlarnaOrderTest extends TestCase
         $this->ajax->expects($this->once())->method('getSummaryResponse')->with([])->willReturn($result);
 
         $this->assertSame($result, $this->controller->execute());
+    }
+
+    /**
+     * @covers ::execute
+     */
+    public function testLockedCheckoutIsRefusedWithoutUpdatingTheOrder(): void
+    {
+        $quote = $this->createMock(\Magento\Quote\Model\Quote::class);
+        $session = $this->createMock(Session::class);
+        $session->method('getQuote')->willReturn($quote);
+        $session->method('getKlarnaQuote')->willReturn($this->klarnaQuote);
+        $initializer = $this->createMock(Initializer::class);
+        $initializer->method('getKcoSession')->willReturn($session);
+        $repository = $this->createMock(QuoteRepositoryInterface::class);
+        $repository->method('getActiveByQuote')->willReturn(
+            new DataObject(['klarna_checkout_id' => 'order-1'])
+        );
+        $this->mutationGuard->method('guardFrontend')
+            ->willThrowException(new CheckoutLockedException(__('Locked')));
+        $initializer->expects($this->never())->method('updateKlarnaTotals');
+        $result = $this->createMock(ResultInterface::class);
+        $this->ajax->expects($this->once())->method('getSummaryResponse')
+            ->with($this->callback(fn (array $d) => $d['locked'] === true && $d['error'] === true))
+            ->willReturn($result);
+
+        $controller = new UpdateKlarnaOrder(
+            $this->createMock(LoggerInterface::class),
+            $initializer,
+            $this->createMock(ManagerInterface::class),
+            $this->ajax,
+            $this->mutationGuard,
+            $repository
+        );
+
+        $this->assertSame($result, $controller->execute());
     }
 }

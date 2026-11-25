@@ -1,22 +1,31 @@
 # Changelog
 
-## 12.5.0 / 2026-11-11
+## 12.5.0 / 2026-11-25
 
 ### Breaking changes
 * None
 
 ### Features / changes
-* KUSTOM-123: Added extension point `Klarna\Kco\Api\RecurringResolverInterface` to mark a checkout as recurring
-* KUSTOM-123: Create and update checkout requests send `recurring` and `options.subscription_buy_button` for recurring quotes
-* KUSTOM-123: The Kustom order is recreated instead of updated when the recurring state of the cart changes
-* KUSTOM-123: Added table `kustom_customer_token`; the encrypted recurring token is saved when the order is created after checkout
-* KUSTOM-123: Orders carry the extension attribute `kustom_customer_token`; REST and SOAP return it only to callers allowed `Klarna_Kco::customer_token`
-* KUSTOM-123: Admin order view shows the recurring token, only for admins allowed `Klarna_Kco::customer_token`
-* KUSTOM-123: Added command `kustom:recurring:recover-token` to store the missing recurring token of existing orders
-* KUSTOM-123: Logging an explicit error when recurring is not enabled for the merchant id
+* KUSTOM-123: Added support for recurring payments: implement `Klarna\Kco\Api\RecurringResolverInterface` to mark carts as recurring
+* KUSTOM-123: The recurring token is stored encrypted in new table `kustom_customer_token` and shown in the admin order view
+* KUSTOM-123: Added command `kustom:recurring:recover-token` to store the token of existing recurring orders
 
 ### Fixes
-* KUSTOM-123: Fixed the error 500 on `kco/api/getAddresses` when the billing or shipping address has no region
+* KUSTOM-123: Fixed error 500 on `kco/api/getAddresses` when an address has no region
+
+## 12.4.5 / 2026-11-25
+
+### Breaking changes
+* None
+
+### Features / changes
+* KUSTOM-128: New nullable column `klarna_kco_quote.validated_at` stores when the validate callback last succeeded, to time the 5-minute lock
+
+### Fixes
+* KUSTOM-129: Addresses Magento cannot save are now rejected in the validate callback so the customer can correct them
+* KUSTOM-127: Push and confirmation reuse the shipping rate accepted at validate instead of collecting rates again
+* KUSTOM-128: Shipping method changes and order updates from the Magento checkout page are refused for 5 minutes after validate and once the order exists
+* KUSTOM-128: Changes made inside the Kustom checkout are not affected
 
 ## 12.4.4 / 2026-10-12
 

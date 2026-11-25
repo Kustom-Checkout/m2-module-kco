@@ -18,6 +18,8 @@
         <column xsi:type="smallint" name="is_recurring" padding="6" unsigned="false" nullable="false" identity="false" default="0" comment="Is Recurring"/>
         <column name="created_at" xsi:type="timestamp" on_update="false" nullable="false" default="CURRENT_TIMESTAMP" comment="Created At"/>
         <column name="updated_at" xsi:type="timestamp" on_update="true" nullable="false" default="CURRENT_TIMESTAMP" comment="Updated At"/>
+        <column name="validated_at" xsi:type="datetime" nullable="true"
+                comment="Validated At (UTC), set by a successful validate callback"/>
 
         <constraint xsi:type="primary" referenceId="PRIMARY">
             <column name="kco_quote_id"/>

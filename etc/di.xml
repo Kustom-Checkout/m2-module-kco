@@ -16,6 +16,7 @@
                 <item name="shipping_method" xsi:type="object">Klarna\Kco\Model\Cart\Validations\ShippingMethod</item>
                 <item name="totals" xsi:type="object">Klarna\Kco\Model\Cart\Validations\OrderTotal</item>
                 <item name="order_items" xsi:type="object">Klarna\Kco\Model\Cart\Validations\OrderItems</item>
+                <item name="customer_address" xsi:type="object">Klarna\Kco\Model\Cart\Validations\CustomerAddress</item>
             </argument>
         </arguments>
     </type>

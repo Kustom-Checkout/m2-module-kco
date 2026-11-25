@@ -8,11 +8,13 @@
 define([
     'jquery',
     'mage/storage',
+    'Magento_Ui/js/model/messageList',
     'Klarna_Kco/js/model/iframe',
     'Klarna_Kco/js/model/config'
 ], function (
     $,
     storage,
+    messageList,
     iframe,
     config
 ) {
@@ -21,6 +23,13 @@ define([
     return function () {
         iframe.suspend();
         storage.post(config.updateKlarnaOrderUrl).done(function (response) {
+            if (response.locked) {
+                // KUSTOM-128: the change was refused, nothing was changed on the server
+                if (response.message) {
+                    messageList.addErrorMessage({message: response.message});
+                }
+            }
+
             if (response.error) {
                 /**
                  * We scroll the customer to the top of the page even the customer is on a lower part of the page to

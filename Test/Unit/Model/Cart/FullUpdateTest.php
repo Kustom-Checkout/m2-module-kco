@@ -1,22 +1,29 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
  */
+declare(strict_types=1);
 
 namespace Klarna\Kco\Test\Unit\Model\Cart;
 
+use Klarna\Base\Model\Quote\Address\Handler;
+use Klarna\Base\Model\Quote\Customer;
+use Klarna\Base\Model\Quote\ShippingMethod\SelectionAssurance;
 use Klarna\Kco\Model\Cart\FullUpdate;
-use Klarna\Base\Test\Unit\Mock\MockFactory;
-use Klarna\Base\Test\Unit\Mock\TestObjectFactory;
+use Klarna\Kco\Model\Cart\Payment;
+use Klarna\Kco\Model\Checkout\Company\Update;
+use Klarna\Logger\Api\LoggerInterface;
 use Magento\Framework\DataObject;
+use Magento\Quote\Api\CartRepositoryInterface;
 use Magento\Quote\Model\Quote;
+use Magento\Quote\Model\Quote\Address;
+use Magento\Quote\Model\Quote\Address\Rate;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
-use Magento\Quote\Api\Data\CartExtension;
-use Magento\Quote\Model\Quote\Address as QuoteAddress;
 
 /**
  * @coversDefaultClass \Klarna\Kco\Model\Cart\FullUpdate
@@ -26,67 +33,326 @@ class FullUpdateTest extends TestCase
     /**
      * @var FullUpdate
      */
-    private $model;
+    private FullUpdate $model;
     /**
-     * @var MockObject[]
+     * @var SelectionAssurance|MockObject
      */
-    private $dependencyMocks;
+    private $selectionAssurance;
     /**
-     * @var MockObject|DataObject
+     * @var Handler|MockObject
      */
-    private $checkout;
+    private $handler;
     /**
-     * @var MockObject|Quote
+     * @var Customer|MockObject
+     */
+    private $customer;
+    /**
+     * @var Quote|MockObject
      */
     private $quote;
     /**
-     * @var MockFactory
+     * @var Address|MockObject
      */
-    private $mockFactory;
+    private $address;
+    /**
+     * @var string[]
+     */
+    private array $calls = [];
+    /**
+     * @var Payment|MockObject
+     */
+    private $payment;
+    /**
+     * @var string[] Info lines written by the model
+     */
+    private array $infoLogs = [];
+    /**
+     * @var bool[]
+     */
+    private array $addToQuoteArgs = [];
+    /**
+     * @var bool Current state of the transient keep-rates flag on the address
+     */
+    private bool $keepFlag = false;
+    /**
+     * @var array Every change of the flag, in order
+     */
+    private array $flagChanges = [];
 
-    public function testUpdateByKlarnaRequestObjectAlwaysUpdatesAddressesAndQuote(): void
+    /**
+     * @covers ::updateByKlarnaRequestObject
+     */
+    public function testAlwaysUpdatesAddressesCustomerAndQuote(): void
     {
-        $this->dependencyMocks['handler']->expects(static::once())
-            ->method('setBillingAddressDataFromRequest');
-        $this->dependencyMocks['handler']->expects(static::once())
-            ->method('setShippingAddressDataFromRequest');
-        $this->dependencyMocks['customer']->expects(static::once())
-            ->method('setCustomerDataFromRequest');
+        $this->handler->expects(static::once())->method('setBillingAddressDataFromRequest');
+        $this->handler->expects(static::once())->method('setShippingAddressDataFromRequest');
+        $this->customer->expects(static::once())->method('setCustomerDataFromRequest');
+        $this->quote->expects(static::once())->method('collectTotals');
 
-        $this->model->updateByKlarnaRequestObject($this->checkout, '1', $this->quote);
+        $this->model->updateByKlarnaRequestObject($this->request('checkout_complete'), '1', $this->quote);
+    }
+
+    /**
+     * @covers ::updateByKlarnaRequestObject
+     */
+    public function testCompletedOrderWithStoredRateReusesRate(): void
+    {
+        $this->prepareAddress('flatrate_flatrate', $this->rate(false));
+        $this->expectStoredRateReused();
+
+        $this->model->updateByKlarnaRequestObject($this->request('checkout_complete'), '1', $this->quote);
+
+        static::assertSame([false], $this->addToQuoteArgs);
+        static::assertSame(['set', 'unset'], $this->flagChanges);
+        static::assertFalse($this->keepFlag);
+        static::assertSame(
+            [
+                'flag:false', 'addToQuote:false', 'flag:false', 'ensure', 'collectTotals',
+                'repoSave', 'flag:false', 'addressSave'
+            ],
+            $this->calls
+        );
+    }
+
+    /**
+     * @covers ::updateByKlarnaRequestObject
+     * @dataProvider reusedStatusProvider
+     * @param string $status
+     */
+    #[DataProvider('reusedStatusProvider')]
+    public function testStatusIsComparedCaseInsensitively(string $status): void
+    {
+        $this->prepareAddress('flatrate_flatrate', $this->rate(false));
+        $this->expectStoredRateReused();
+
+        $this->model->updateByKlarnaRequestObject($this->request($status), '1', $this->quote);
+
+        static::assertSame([false], $this->addToQuoteArgs);
+        static::assertSame(
+            [
+                'flag:false', 'addToQuote:false', 'flag:false', 'ensure', 'collectTotals',
+                'repoSave', 'flag:false', 'addressSave'
+            ],
+            $this->calls
+        );
+    }
+
+    /**
+     * @covers ::updateByKlarnaRequestObject
+     */
+    public function testReusedRateIsLogged(): void
+    {
+        $this->prepareAddress('flatrate_flatrate', $this->rate(false));
+        $this->expectStoredRateReused();
+
+        $this->model->updateByKlarnaRequestObject($this->request('checkout_complete'), 'abc-1', $this->quote);
+
+        static::assertCount(1, $this->infoLogs);
+        static::assertStringStartsWith(
+            'FullUpdate: reusing shipping rate stored at validate, method: flatrate_flatrate, amount: ',
+            $this->infoLogs[0]
+        );
+        static::assertStringEndsWith(', status: checkout_complete, Kustom checkout id: abc-1', $this->infoLogs[0]);
+    }
+
+    /**
+     * @covers ::updateByKlarnaRequestObject
+     * @dataProvider liveCollectionReasonProvider
+     * @param string|null $status
+     * @param string|null $method
+     * @param string|false $rate
+     * @param bool $virtual
+     * @param string $reason
+     */
+    #[DataProvider('liveCollectionReasonProvider')]
+    public function testLiveCollectionReasonIsLogged(
+        ?string $status,
+        ?string $method,
+        $rate,
+        bool $virtual,
+        string $reason
+    ): void {
+        $this->quote->method('isVirtual')->willReturn($virtual);
+        $this->prepareAddress($method, $rate === 'rate' ? $this->rate(false) : $rate);
+        $this->expectPreCollect();
+
+        $this->model->updateByKlarnaRequestObject($this->request($status), 'abc-1', $this->quote);
+
+        static::assertSame(
+            ['FullUpdate: collecting live shipping rates, reason: ' . $reason . ', Kustom checkout id: abc-1'],
+            $this->infoLogs
+        );
     }
 
     /**
      * @return array
      */
-    public function checkoutDataObjectProvider(): array
+    public static function liveCollectionReasonProvider(): array
     {
         return [
-            [
-                [
-                    'hasBillingAddress' => true,
-                    'hasShippingAddress' => true
-                ]
+            'validate' => ['checkout_incomplete', 'flatrate_flatrate', 'rate', false, 'status checkout_incomplete'],
+            'no status' => [null, 'flatrate_flatrate', 'rate', false, 'status none'],
+            'virtual' => ['checkout_complete', null, false, true, 'virtual quote'],
+            'no method' => ['checkout_complete', null, false, false, 'no shipping method'],
+            'no rate' => [
+                'checkout_complete', 'flatrate_flatrate', false, false, 'no stored rate for flatrate_flatrate'
             ],
-            [
-                [
-                    'hasBillingAddress' => false,
-                    'hasShippingAddress' => true
-                ]
-            ],
-            [
-                [
-                    'hasBillingAddress' => true,
-                    'hasShippingAddress' => false
-                ]
-            ],
-            [
-                [
-                    'hasBillingAddress' => false,
-                    'hasShippingAddress' => false
-                ]
-            ]
         ];
+    }
+
+    /**
+     * @return string[][]
+     */
+    public static function reusedStatusProvider(): array
+    {
+        return [['CHECKOUT_COMPLETE'], ['created'], ['Created']];
+    }
+
+    /**
+     * @covers ::updateByKlarnaRequestObject
+     */
+    public function testCompletedOrderWithoutStoredRateCollectsRates(): void
+    {
+        $this->prepareAddress('flatrate_flatrate', false);
+        $this->expectPreCollect();
+
+        $this->model->updateByKlarnaRequestObject($this->request('checkout_complete'), '1', $this->quote);
+
+        static::assertSame([true], $this->addToQuoteArgs);
+    }
+
+    /**
+     * @covers ::updateByKlarnaRequestObject
+     */
+    public function testCompletedOrderWithoutShippingMethodCollectsRates(): void
+    {
+        $this->prepareAddress(null, false);
+        $this->expectPreCollect();
+
+        $this->model->updateByKlarnaRequestObject($this->request('checkout_complete'), '1', $this->quote);
+
+        static::assertSame([true], $this->addToQuoteArgs);
+    }
+
+    /**
+     * @covers ::updateByKlarnaRequestObject
+     */
+    public function testDeletedStoredRateCollectsRates(): void
+    {
+        $this->prepareAddress('flatrate_flatrate', $this->rate(true));
+        $this->expectPreCollect();
+
+        $this->model->updateByKlarnaRequestObject($this->request('checkout_complete'), '1', $this->quote);
+
+        static::assertSame([true], $this->addToQuoteArgs);
+    }
+
+    /**
+     * @covers ::updateByKlarnaRequestObject
+     * @dataProvider notCompletedProvider
+     * @param string|null $status
+     */
+    #[DataProvider('notCompletedProvider')]
+    public function testNotCompletedOrderCollectsRates(?string $status): void
+    {
+        $this->prepareAddress('flatrate_flatrate', $this->rate(false));
+        $this->expectPreCollect();
+
+        $this->model->updateByKlarnaRequestObject($this->request($status), '1', $this->quote);
+
+        static::assertSame([true], $this->addToQuoteArgs);
+    }
+
+    /**
+     * @return array
+     */
+    public static function notCompletedProvider(): array
+    {
+        return [['checkout_incomplete'], [null], ['']];
+    }
+
+    /**
+     * @covers ::updateByKlarnaRequestObject
+     */
+    public function testVirtualQuoteIsUnchanged(): void
+    {
+        $this->quote->method('isVirtual')->willReturn(true);
+        $this->address->expects(static::never())->method('getShippingRateByCode');
+        $this->expectPreCollect();
+
+        $this->model->updateByKlarnaRequestObject($this->request('checkout_complete'), '1', $this->quote);
+
+        static::assertSame([true], $this->addToQuoteArgs);
+    }
+
+    /**
+     * @param string|null $status
+     * @return DataObject
+     */
+    private function request(?string $status): DataObject
+    {
+        $data = [
+            'billing_address' => ['country' => 'SE', 'city' => 'A'],
+            'shipping_address' => ['country' => 'SE', 'city' => 'A'],
+        ];
+        if ($status !== null) {
+            $data['status'] = $status;
+        }
+
+        return new DataObject($data);
+    }
+
+    /**
+     * @param bool $deleted
+     * @return Rate|MockObject
+     */
+    private function rate(bool $deleted)
+    {
+        $rate = $this->createMock(Rate::class);
+        $rate->method('isDeleted')->willReturn($deleted);
+
+        return $rate;
+    }
+
+    /**
+     * @param string|null $method
+     * @param Rate|false $rate
+     */
+    private function prepareAddress(?string $method, $rate): void
+    {
+        $this->address->method('getShippingMethod')->willReturn($method);
+        $this->address->method('getShippingRateByCode')->willReturn($rate);
+    }
+
+    private function expectStoredRateReused(): void
+    {
+        $this->selectionAssurance->expects(static::never())->method('ensureShippingMethodSelectedWithPreCollect');
+        $this->selectionAssurance->expects(static::once())->method('ensureShippingMethodSelected')
+            ->willReturnCallback(function () {
+                $this->calls[] = 'ensure';
+                return $this->selectionAssurance;
+            });
+        $this->address->expects(static::once())->method('save')->willReturnCallback(function () {
+            $this->calls[] = 'addressSave';
+            return $this->address;
+        });
+        $this->address->method('__call')->willReturnCallback(function (string $name, array $args) {
+            if ($name === 'setCollectShippingRates' && $args === [false]) {
+                $this->calls[] = 'flag:false';
+            }
+            return $this->address;
+        });
+    }
+
+    private function expectPreCollect(): void
+    {
+        $this->selectionAssurance->expects(static::once())->method('ensureShippingMethodSelectedWithPreCollect');
+        $this->address->expects(static::never())->method('save');
+        $this->selectionAssurance->expects(static::never())->method('ensureShippingMethodSelected');
+        $this->address->method('__call')->willReturnCallback(function (string $name, array $args) {
+            $this->calls[] = $name;
+            return $this->address;
+        });
     }
 
     /**
@@ -94,44 +360,68 @@ class FullUpdateTest extends TestCase
      */
     protected function setUp(): void
     {
-        $this->mockFactory     = new MockFactory($this);
-        $objectFactory         = new TestObjectFactory('');
-        $this->model           = $objectFactory->create(FullUpdate::class);
-        $this->dependencyMocks = $objectFactory->getDependencyMocks();
-        $this->checkout        = $this->mockFactory->create(DataObject::class, [], [
-            'getShippingAddress',
-            'getBillingAddress',
-            'getSelectedShippingOption',
-            'hasBillingAddress',
-            'hasShippingAddress',
-            'setShippingAddress'
-        ]);
+        $this->calls = [];
+        $this->addToQuoteArgs = [];
+        $this->keepFlag = false;
+        $this->flagChanges = [];
+        $this->payment = $this->createMock(Payment::class);
+        $this->payment->method('addToQuote')->willReturnCallback(function ($quote) {
+            $collect = !$this->keepFlag;
+            $this->addToQuoteArgs[] = $collect;
+            $this->calls[] = 'addToQuote:' . ($collect ? 'true' : 'false');
+        });
+        $this->selectionAssurance = $this->createMock(SelectionAssurance::class);
+        $this->handler = $this->createMock(Handler::class);
+        $this->customer = $this->createMock(Customer::class);
+        $this->address = $this->createMock(Address::class);
+        $this->address->method('setData')->willReturnCallback(function ($key, $value = null) {
+            if ($key === Payment::KEEP_SHIPPING_RATES_FLAG) {
+                $this->keepFlag = true;
+                $this->flagChanges[] = 'set';
+            }
+            return $this->address;
+        });
+        $this->address->method('unsetData')->willReturnCallback(function ($key = null) {
+            if ($key === Payment::KEEP_SHIPPING_RATES_FLAG) {
+                $this->keepFlag = false;
+                $this->flagChanges[] = 'unset';
+            }
+            return $this->address;
+        });
+        $this->quote = $this->createMock(Quote::class);
+        $this->quote->method('getShippingAddress')->willReturn($this->address);
+        $this->quote->method('getReservedOrderId')->willReturn('100000001');
+        $this->quote->method('collectTotals')->willReturnCallback(function () {
+            $this->calls[] = 'collectTotals';
+            return $this->quote;
+        });
 
-        $this->quote           = $this->mockFactory->create(Quote::class, []);
-        $quoteShippingAddress = $this->mockFactory->create(QuoteAddress::class);
-        $this->quote->method('getShippingAddress')
-            ->willReturn($quoteShippingAddress);
+        $cartRepository = $this->createMock(CartRepositoryInterface::class);
+        $cartRepository->method('save')->willReturnCallback(function () {
+            $this->calls[] = 'repoSave';
+        });
 
-        if (method_exists(CartExtension::class, 'getShippingAssignments')) {
-            $extensionAttributes = $this->mockFactory->create(CartExtension::class, ['getShippingAssignments']);
-        } else {
-            $extensionAttributes = $this->mockFactory->create(CartExtension::class, [], ['getShippingAssignments']);
-        }
+        $this->model = new FullUpdate(
+            $this->customer,
+            $this->handler,
+            $this->selectionAssurance,
+            $cartRepository,
+            $this->createMock(Update::class),
+            $this->payment,
+            $this->createConfiguredLogger()
+        );
+    }
 
-        $extensionAttributes->method('getShippingAssignments')
-            ->willReturn([]);
+    /**
+     * @return LoggerInterface|MockObject
+     */
+    private function createConfiguredLogger()
+    {
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->method('info')->willReturnCallback(function ($message): void {
+            $this->infoLogs[] = (string) $message;
+        });
 
-        $this->checkout->expects(static::once())
-            ->method('getShippingAddress')
-            ->willReturn([
-                'country' => 'value_1',
-                'city' => 'value_2'
-            ]);
-        $this->checkout->expects(static::once())
-            ->method('getBillingAddress')
-            ->willReturn([
-                'country' => 'value_3',
-                'city' => 'value_4'
-            ]);
+        return $logger;
     }
 }
