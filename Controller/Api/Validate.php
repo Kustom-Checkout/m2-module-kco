@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Klarna\Kco\Controller\Api;
 
 use Klarna\Kco\Api\ApiInterface;
+use Klarna\Kco\Exception\AddressValidationException;
 use Klarna\Logger\Api\LoggerInterface;
 use Klarna\Base\Api\ServiceInterface;
 use Klarna\Base\Exception as KlarnaException;
@@ -135,6 +136,8 @@ class Validate extends CsrfAbstract implements HttpPostActionInterface
                 $this->klarna->getKlarnaRequestBody($this->request),
                 $this->workflowProvider->getMagentoQuote()
             );
+        } catch (AddressValidationException $e) {
+            return $this->getAddressErrorResponse($checkoutId, $e);
         } catch (KlarnaException $e) {
             return $this->setValidateFailedResponse($checkoutId, $e);
         }
@@ -154,6 +157,23 @@ class Validate extends CsrfAbstract implements HttpPostActionInterface
     {
         $this->logger->info('Validate: success');
         return $this->result->getJsonResult(200);
+    }
+
+    /**
+     * Getting back the response that keeps the customer in the checkout to correct the address
+     *
+     * @param string|null $checkoutId
+     * @param AddressValidationException $e
+     * @return Json
+     */
+    private function getAddressErrorResponse($checkoutId, AddressValidationException $e): Json
+    {
+        $this->logger->warning('Validate: address rejected, Kustom checkout id: ' . $checkoutId);
+
+        return $this->result->getJsonResult(
+            400,
+            ['error_type' => 'address_error', 'error_text' => $e->getMessage()]
+        );
     }
 
     /**
