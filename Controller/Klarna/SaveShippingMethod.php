@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -9,11 +9,15 @@ declare(strict_types=1);
 
 namespace Klarna\Kco\Controller\Klarna;
 
+use Klarna\Kco\Api\QuoteRepositoryInterface;
+use Klarna\Kco\Exception\CheckoutLockedException;
+use Klarna\Kco\Model\Checkout\MutationGuard;
 use Klarna\Base\Model\Quote\ShippingMethod\QuoteMethodHandler as QuoteShippingMethod;
 use Klarna\Logger\Api\LoggerInterface;
 use Klarna\Kco\Model\Checkout\Kco\Initializer as kcoInitializer;
 use Klarna\Kco\Model\Responder\Ajax;
 use Magento\Framework\App\Action\HttpPostActionInterface;
+use Magento\Framework\App\ObjectManager;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Controller\ResultInterface;
 use Magento\Framework\App\RequestInterface;
@@ -51,6 +55,14 @@ class SaveShippingMethod implements HttpPostActionInterface
      * @var ManagerInterface
      */
     private ManagerInterface $messageManager;
+    /**
+     * @var MutationGuard
+     */
+    private MutationGuard $mutationGuard;
+    /**
+     * @var QuoteRepositoryInterface
+     */
+    private QuoteRepositoryInterface $klarnaQuoteRepository;
 
     /**
      * @param LoggerInterface $logger
@@ -59,6 +71,8 @@ class SaveShippingMethod implements HttpPostActionInterface
      * @param QuoteShippingMethod $quoteShippingMethod
      * @param RequestInterface $request
      * @param ManagerInterface $messageManager
+     * @param MutationGuard|null $mutationGuard
+     * @param QuoteRepositoryInterface|null $klarnaQuoteRepository
      * @codeCoverageIgnore
      */
     public function __construct(
@@ -67,7 +81,9 @@ class SaveShippingMethod implements HttpPostActionInterface
         Ajax $ajax,
         QuoteShippingMethod $quoteShippingMethod,
         RequestInterface $request,
-        ManagerInterface $messageManager
+        ManagerInterface $messageManager,
+        ?MutationGuard $mutationGuard = null,
+        ?QuoteRepositoryInterface $klarnaQuoteRepository = null
     ) {
         $this->logger              = $logger;
         $this->kcoInitializer      = $kcoInitializer;
@@ -75,6 +91,9 @@ class SaveShippingMethod implements HttpPostActionInterface
         $this->quoteShippingMethod = $quoteShippingMethod;
         $this->request = $request;
         $this->messageManager = $messageManager;
+        $this->mutationGuard = $mutationGuard ?: ObjectManager::getInstance()->get(MutationGuard::class);
+        $this->klarnaQuoteRepository = $klarnaQuoteRepository
+            ?: ObjectManager::getInstance()->get(QuoteRepositoryInterface::class);
     }
 
     /**
@@ -84,14 +103,31 @@ class SaveShippingMethod implements HttpPostActionInterface
      */
     public function execute()
     {
+        $kustomId = '';
         try {
             $body = json_decode($this->request->getContent(), true);
+            $quote = $this->kcoInitializer->getKcoSession()->getQuote();
+            $method = $body['carrier_code'] . '_' . $body['method_code'];
+            $this->logger->debug('SaveShippingMethod: start, method: ' . $method);
 
-            $this->quoteShippingMethod->updateShippingMethod(
-                $this->kcoInitializer->getKcoSession()->getQuote(),
-                $body['carrier_code'] . '_' . $body['method_code']
+            // KUSTOM-128: saving the method the quote already has changes nothing (e.g. a page reload)
+            if ($quote->getShippingAddress()->getShippingMethod() === $method) {
+                $this->logger->debug('SaveShippingMethod: method unchanged, nothing to save');
+                return $this->ajax->getSummaryResponse();
+            }
+
+            $kustomId = $this->getKustomId($quote);
+            if ($kustomId !== '') {
+                $this->mutationGuard->guardFrontend($kustomId);
+            }
+
+            $this->quoteShippingMethod->updateShippingMethod($quote, $method);
+        } catch (CheckoutLockedException $e) {
+            // KUSTOM-128: payment in progress or order created, the quote stays untouched
+            $this->logger->info('SaveShippingMethod: refused, checkout locked, Kustom checkout id: ' . $kustomId);
+            return $this->ajax->getSummaryResponse(
+                ['error' => true, 'locked' => true, 'message' => $e->getMessage()]
             );
-
         } catch (LocalizedException $e) {
             $this->logger->critical($e);
             $this->messageManager->addErrorMessage(__(
@@ -100,5 +136,29 @@ class SaveShippingMethod implements HttpPostActionInterface
         }
 
         return $this->ajax->getSummaryResponse();
+    }
+
+    /**
+     * Kustom checkout id of the active Kustom quote, empty if there is none (no row is created)
+     *
+     * @param \Magento\Quote\Api\Data\CartInterface|null $quote
+     * @return string
+     */
+    private function getKustomId($quote): string
+    {
+        if ($quote === null) {
+            return '';
+        }
+
+        try {
+            return (string) $this->klarnaQuoteRepository->getActiveByQuote($quote)->getKlarnaCheckoutId();
+        } catch (\Throwable $e) {
+            // Fail-open: without a Kustom id the guard is skipped, as before KUSTOM-128
+            $this->logger->warning(
+                'SaveShippingMethod: Kustom checkout id lookup failed, mutation guard skipped: ' . $e->getMessage()
+            );
+
+            return '';
+        }
     }
 }

@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -79,6 +79,34 @@ class Quote extends AbstractModel implements QuoteInterface, IdentityInterface
     {
         $this->setData('quote_id', $quoteId);
         return $this;
+    }
+
+    /**
+     * Set the time (UTC, Y-m-d H:i:s) of the last successful validate callback, null clears it
+     *
+     * Not part of the @api QuoteInterface on purpose (adding methods to it would break implementors).
+     * Whole-row saves ignore validated_at (the column is written only by the dedicated update), so setting it
+     * here and saving the quote does not persist it: use Klarna\Kco\Model\Checkout\ValidatedMarker.
+     *
+     * @internal
+     * @param string|null $validatedAt
+     * @return $this
+     */
+    public function setValidatedAt(?string $validatedAt)
+    {
+        $this->setData('validated_at', $validatedAt);
+        return $this;
+    }
+
+    /**
+     * Get the time (UTC, Y-m-d H:i:s) of the last successful validate callback
+     *
+     * @return string|null
+     */
+    public function getValidatedAt(): ?string
+    {
+        $value = $this->_getData('validated_at');
+        return $value === null || $value === '' ? null : (string) $value;
     }
 
     /**
