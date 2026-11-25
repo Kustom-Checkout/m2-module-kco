@@ -6,7 +6,7 @@
 * None
 
 ### Features / changes
-* KUSTOM-128: New nullable column `klarna_kco_quote.validated_at`; run `bin/magento setup:upgrade` after updating
+* KUSTOM-128: New nullable column `klarna_kco_quote.validated_at`
 
 ### Fixes
 * KUSTOM-129: Addresses Magento cannot save are now rejected in the validate callback, so the customer can correct them before paying
