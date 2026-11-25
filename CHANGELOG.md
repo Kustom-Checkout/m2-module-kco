@@ -1,16 +1,5 @@
 # Changelog
 
-## 12.4.6 / 2026-11-20
-
-### Breaking changes
-* None
-
-### Features / changes
-* None
-
-### Fixes
-* KUSTOM-127: Push and confirmation reuse the shipping rate accepted in the validate callback instead of collecting carrier rates again after payment
-
 ## 12.4.5 / 2026-11-20
 
 ### Breaking changes
@@ -21,6 +10,7 @@
 
 ### Fixes
 * KUSTOM-129: Addresses Magento cannot save are now rejected in the validate callback, so the customer can correct them before paying
+* KUSTOM-127: Push and confirmation reuse the shipping rate accepted in the validate callback instead of collecting carrier rates again after payment
 
 ## 12.4.4 / 2026-10-12
 
