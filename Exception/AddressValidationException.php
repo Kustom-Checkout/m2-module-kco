@@ -12,7 +12,7 @@ namespace Klarna\Kco\Exception;
 use Klarna\Base\Exception;
 
 /**
- * Thrown when the billing address would be rejected by Magento when the order is placed
+ * Thrown when the billing or shipping address would be rejected by Magento when the order is placed
  *
  * @internal
  */

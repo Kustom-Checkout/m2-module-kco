@@ -14,13 +14,14 @@ use Klarna\Kco\Exception\AddressValidationException;
 use Klarna\Logger\Api\LoggerInterface;
 use Magento\Checkout\Model\Type\Onepage;
 use Magento\Framework\DataObject;
+use Magento\Framework\Phrase;
 use Magento\Framework\Validator\Exception as ValidatorException;
 use Magento\Quote\Api\Data\CartInterface;
 use Magento\Quote\Model\CustomerManagement;
 use Magento\Quote\Model\Quote;
 
 /**
- * Validating the billing address with the same checks Magento applies when the order is placed
+ * Validating the billing and shipping address with the same checks Magento applies when the order is placed
  *
  * @internal
  */
@@ -58,7 +59,8 @@ class CustomerAddress implements CheckoutValidationInterface
             return;
         }
 
-        // The guest flag is normally set when the order is placed. The clone is never saved.
+        // The guest flag is normally set when the order is placed. The clone is shallow and never saved: the
+        // addresses are shared with the live quote, so the store id set below also lands on them (as in Magento).
         $probe = clone $quote;
         if ($quote->getCheckoutMethod() === Onepage::METHOD_GUEST || !$quote->getCustomerId()) {
             $probe->setCustomerIsGuest(true);
@@ -66,15 +68,12 @@ class CustomerAddress implements CheckoutValidationInterface
 
         try {
             $this->customerManagement->validateAddresses($probe);
+            $this->validateSubmitRules($probe);
             $this->logger->info('Validate: address check passed');
         } catch (ValidatorException $e) {
-            $this->logger->warning(
-                'Validate: Magento rejects the billing address, validation errors: ' . count($e->getMessages())
-                . ', fields: ' . implode(', ', $this->getFailedFields($e))
-            );
-            throw new AddressValidationException(
-                __('We could not use this address. Please check the billing address and try again.')
-            );
+            $this->rejectAddress($e->getMessages());
+        } catch (AddressValidationException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             $this->logger->warning(
                 'Validate: Address check skipped, ' . get_class($e) . ': ' . $e->getMessage()
@@ -83,19 +82,73 @@ class CustomerAddress implements CheckoutValidationInterface
     }
 
     /**
+     * The address rules Magento applies on submit (billing, and shipping unless the quote is virtual)
+     *
+     * Needed because CustomerManagement only checks saved customer addresses or the guest billing address,
+     * so a logged-in customer with an address typed in the checkout is otherwise never validated.
+     *
+     * @param Quote $probe
+     * @return void
+     * @throws AddressValidationException
+     */
+    private function validateSubmitRules(Quote $probe): void
+    {
+        $errors = [];
+        $billingAddress = $probe->getBillingAddress();
+        $billingAddress->setStoreId($probe->getStoreId());
+        $result = $billingAddress->validate();
+        if (is_array($result)) {
+            $errors = $result;
+        }
+
+        if (!$probe->isVirtual()) {
+            $shippingAddress = $probe->getShippingAddress();
+            $shippingAddress->setStoreId($probe->getStoreId());
+            $result = $shippingAddress->validate();
+            if (is_array($result)) {
+                $errors = array_merge($errors, $result);
+            }
+        }
+
+        if ($errors !== []) {
+            $this->rejectAddress($errors);
+        }
+    }
+
+    /**
+     * Logging the failed field names and rejecting the address
+     *
+     * @param array $messages
+     * @return void
+     * @throws AddressValidationException
+     */
+    private function rejectAddress(array $messages): void
+    {
+        $this->logger->warning(
+            'Validate: Magento rejects the address, validation errors: ' . count($messages)
+            . ', fields: ' . implode(', ', $this->getFailedFields($messages))
+        );
+        throw new AddressValidationException(
+            __('We could not use this address. Please check your address and try again.')
+        );
+    }
+
+    /**
      * Getting back the names of the failed fields, never the submitted values
      *
      * Only fixed message texts are read: `"<field>" is required` and `Invalid <Field>.` (Magento's
      * city, street and telephone validators). Anything else, e.g. a translated message, is reported as `other`.
      *
-     * @param ValidatorException $e
+     * @param array $messages Phrase or string items, or message objects with getText()
      * @return string[]
      */
-    private function getFailedFields(ValidatorException $e): array
+    private function getFailedFields(array $messages): array
     {
         $fields = [];
-        foreach ($e->getMessages() as $message) {
-            $text = (string) $message->getText();
+        foreach ($messages as $message) {
+            $text = !$message instanceof Phrase && is_object($message) && method_exists($message, 'getText')
+                ? (string) $message->getText()
+                : (string) $message;
             if (preg_match('/^"([A-Za-z_]+)" is required/', $text, $match)
                 || preg_match('/^Invalid ([A-Za-z ]+?)\./', $text, $match)
             ) {

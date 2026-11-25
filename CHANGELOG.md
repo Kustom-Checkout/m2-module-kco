@@ -9,7 +9,7 @@
 * KUSTOM-128: New nullable column `klarna_kco_quote.validated_at`
 
 ### Fixes
-* KUSTOM-129: Addresses Magento cannot save are now rejected in the validate callback, so the customer can correct them before paying
+* KUSTOM-129: Addresses Magento cannot save, for guests and logged-in customers, are now rejected in the validate callback so the customer can correct them before paying
 * KUSTOM-127: Push and confirmation reuse the shipping rate accepted in the validate callback instead of collecting carrier rates again after payment
 * KUSTOM-128: For 5 minutes after a successful validate, and once the order exists, shipping method changes and order updates from the Magento checkout page are refused with a message, so the quote cannot change before the order is created; changes inside the Kustom checkout are not affected
 
