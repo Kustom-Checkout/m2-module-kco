@@ -39,6 +39,14 @@ class CustomerAddressTest extends TestCase
      * @var LoggerInterface|MockObject
      */
     private $logger;
+    /**
+     * @var Address|MockObject
+     */
+    private $shippingAddress;
+    /**
+     * @var Address|MockObject
+     */
+    private $billingAddress;
 
     protected function setUp(): void
     {
@@ -51,14 +59,33 @@ class CustomerAddressTest extends TestCase
      * @param string|null $country
      * @param int|null $customerId
      * @param string|null $checkoutMethod
+     * @param bool|array $billingResult result of the billing Address::validate()
+     * @param bool|array $shippingResult result of the shipping Address::validate()
+     * @param bool $virtual
      * @return Quote|MockObject
      */
-    private function createQuote(?string $country, ?int $customerId, ?string $checkoutMethod = null)
-    {
-        $address = $this->createPartialMock(Address::class, ['getCountryId']);
+    private function createQuote(
+        ?string $country,
+        ?int $customerId,
+        ?string $checkoutMethod = null,
+        $billingResult = true,
+        $shippingResult = true,
+        bool $virtual = false
+    ) {
+        $address = $this->createPartialMock(Address::class, ['getCountryId', 'validate']);
+        $this->billingAddress = $address;
         $address->method('getCountryId')->willReturn($country);
-        $quote = $this->createPartialMock(Quote::class, ['getBillingAddress', 'getCheckoutMethod']);
+        $address->method('validate')->willReturn($billingResult);
+        $this->shippingAddress = $this->createPartialMock(Address::class, ['validate']);
+        $this->shippingAddress->method('validate')->willReturn($shippingResult);
+        $quote = $this->createPartialMock(
+            Quote::class,
+            ['getBillingAddress', 'getShippingAddress', 'getCheckoutMethod', 'isVirtual']
+        );
         $quote->method('getBillingAddress')->willReturn($address);
+        $quote->method('getShippingAddress')->willReturn($this->shippingAddress);
+        $quote->method('isVirtual')->willReturn($virtual);
+        $quote->setData('store_id', 3);
         $quote->setData('customer_id', $customerId);
         $quote->method('getCheckoutMethod')->willReturn($checkoutMethod);
 
@@ -95,7 +122,7 @@ class CustomerAddressTest extends TestCase
             static::fail('AddressValidationException expected');
         } catch (AddressValidationException $e) {
             static::assertSame(
-                'We could not use this address. Please check the billing address and try again.',
+                'We could not use this address. Please check your address and try again.',
                 $e->getMessage()
             );
             static::assertStringNotContainsString('secret', $e->getMessage());
@@ -210,5 +237,121 @@ class CustomerAddressTest extends TestCase
         $this->model->validate(new DataObject(), $quote);
 
         static::assertNull($probeGuest);
+    }
+
+    /**
+     * Logged-in customer, address typed in the checkout (no saved customer address id)
+     *
+     * @covers ::validate
+     * @covers ::validateSubmitRules
+     * @covers ::getFailedFields
+     */
+    public function testValidateRejectsInvalidBillingAddressOfLoggedInCustomer(): void
+    {
+        $quote = $this->createQuote(
+            'SE',
+            5,
+            'register',
+            [__('"%fieldName" is required. Enter and try again.', ['fieldName' => 'company'])]
+        );
+        $this->logger->expects(static::once())->method('warning')
+            ->with(static::callback(
+                fn (string $m): bool => str_contains($m, 'errors: 1, fields: company')
+            ));
+        $this->logger->expects(static::never())->method('info');
+
+        $this->expectException(AddressValidationException::class);
+        $this->model->validate(new DataObject(), $quote);
+    }
+
+    /**
+     * @covers ::validate
+     * @covers ::validateSubmitRules
+     */
+    public function testValidateRejectsInvalidShippingAddressOfLoggedInCustomer(): void
+    {
+        $quote = $this->createQuote('SE', 5, 'register', true, ['Invalid City. secret value']);
+        $this->logger->expects(static::once())->method('warning')
+            ->with(static::callback(
+                fn (string $m): bool => str_contains($m, 'fields: City') && !str_contains($m, 'secret')
+            ));
+        $this->logger->expects(static::never())->method('info');
+
+        $this->expectException(AddressValidationException::class);
+        $this->model->validate(new DataObject(), $quote);
+    }
+
+    /**
+     * @covers ::validateSubmitRules
+     */
+    public function testValidateSetsStoreIdOnBillingAndShippingAddress(): void
+    {
+        $quote = $this->createQuote('SE', 5, 'register');
+
+        $this->model->validate(new DataObject(), $quote);
+
+        static::assertSame(3, $this->shippingAddress->getStoreId());
+        static::assertSame(3, $this->billingAddress->getStoreId());
+    }
+
+    /**
+     * @covers ::validate
+     * @covers ::validateSubmitRules
+     * @covers ::getFailedFields
+     */
+    public function testValidateRejectsInvalidShippingAddressOfGuest(): void
+    {
+        $quote = $this->createQuote(
+            'SE',
+            null,
+            Onepage::METHOD_GUEST,
+            true,
+            [__('"%fieldName" is required. Enter and try again.', ['fieldName' => 'company'])]
+        );
+        $this->logger->expects(static::once())->method('warning')
+            ->with(static::callback(
+                fn (string $m): bool => str_contains($m, 'errors: 1, fields: company')
+            ));
+        $this->logger->expects(static::never())->method('info');
+
+        $this->expectException(AddressValidationException::class);
+        $this->model->validate(new DataObject(), $quote);
+    }
+
+    /**
+     * @covers ::validateSubmitRules
+     */
+    public function testValidateSkipsShippingAddressForVirtualQuote(): void
+    {
+        $quote = $this->createQuote('SE', 5, 'register', true, ['Invalid City.'], true);
+        $this->logger->expects(static::never())->method('warning');
+        $this->logger->expects(static::once())->method('info')->with('Validate: address check passed');
+
+        $this->model->validate(new DataObject(), $quote);
+    }
+
+    /**
+     * @covers ::validateSubmitRules
+     */
+    public function testValidatePassesWhenBothAddressesAreValid(): void
+    {
+        $this->logger->expects(static::never())->method('warning');
+        $this->logger->expects(static::once())->method('info')->with('Validate: address check passed');
+
+        $this->model->validate(new DataObject(), $this->createQuote('SE', 5, 'register'));
+    }
+
+    /**
+     * @covers ::validate
+     */
+    public function testValidateFailsOpenWhenAddressRulesThrowUnexpectedException(): void
+    {
+        $quote = $this->createQuote('SE', 5, 'register');
+        $quote->method('getShippingAddress')->willThrowException(new \RuntimeException('boom'));
+        $this->logger->expects(static::once())->method('warning')
+            ->with(static::stringContains('Address check skipped'));
+        $this->logger->expects(static::never())->method('info');
+
+        $this->model->validate(new DataObject(), $quote);
     }
 }
