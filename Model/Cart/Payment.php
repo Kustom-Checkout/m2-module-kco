@@ -1,6 +1,6 @@
 <?php
 /**
- * Copyright © Klarna Bank AB (publ)
+ * Copyright © Kustom AB
  *
  * For the full copyright and license information, please view the NOTICE
  * and LICENSE files that were distributed with this source code.
@@ -17,7 +17,11 @@ use Magento\Quote\Api\Data\CartInterface;
  */
 class Payment
 {
-    
+    /**
+     * Transient address flag: when set, the stored shipping rates are kept (no re-collection on import)
+     */
+    public const KEEP_SHIPPING_RATES_FLAG = 'kustom_keep_shipping_rates';
+
     /**
      * Add payment specific information to the quote
      *
@@ -29,7 +33,9 @@ class Payment
             $address = $quote->getBillingAddress();
         } else {
             $address = $quote->getShippingAddress();
-            $quote->getShippingAddress()->setCollectShippingRates(true);
+            if (!$address->getData(self::KEEP_SHIPPING_RATES_FLAG)) {
+                $address->setCollectShippingRates(true);
+            }
         }
 
         $data = ['method' => Kco::METHOD_CODE];
