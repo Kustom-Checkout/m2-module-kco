@@ -6,11 +6,13 @@
  */
 /*jshint browser:true jquery:true*/
 define([
+    'jquery',
     'mage/storage',
     'Magento_Ui/js/model/messageList',
     'Klarna_Kco/js/model/iframe',
     'Klarna_Kco/js/model/config'
 ], function (
+    $,
     storage,
     messageList,
     iframe,
@@ -36,6 +38,11 @@ define([
                 window.scrollTo(0, 'smooth');
             }
             iframe.resume();
+
+            if (response['html_snippet']) {
+                // The Kustom order was recreated, so the iframe has to be replaced.
+                $('#klarna-checkout-container').replaceWith(response['html_snippet']);
+            }
         });
     };
 });

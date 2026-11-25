@@ -1,17 +1,31 @@
 # Changelog
 
+## 12.5.0 / 2026-11-25
+
+### Breaking changes
+* None
+
+### Features / changes
+* KUSTOM-123: Added support for recurring payments: implement `Klarna\Kco\Api\RecurringResolverInterface` to mark carts as recurring
+* KUSTOM-123: The recurring token is stored encrypted in new table `kustom_customer_token` and shown in the admin order view
+* KUSTOM-123: Added command `kustom:recurring:recover-token` to store the token of existing recurring orders
+
+### Fixes
+* KUSTOM-123: Fixed error 500 on `kco/api/getAddresses` when an address has no region
+
 ## 12.4.5 / 2026-11-25
 
 ### Breaking changes
 * None
 
 ### Features / changes
-* KUSTOM-128: New nullable column `klarna_kco_quote.validated_at`
+* KUSTOM-128: New nullable column `klarna_kco_quote.validated_at` stores when the validate callback last succeeded, to time the 5-minute lock
 
 ### Fixes
-* KUSTOM-129: Addresses Magento cannot save, for guests and logged-in customers, are now rejected in the validate callback so the customer can correct them before paying
-* KUSTOM-127: Push and confirmation reuse the shipping rate accepted in the validate callback instead of collecting carrier rates again after payment
-* KUSTOM-128: For 5 minutes after a successful validate, and once the order exists, shipping method changes and order updates from the Magento checkout page are refused with a message, so the quote cannot change before the order is created; changes inside the Kustom checkout are not affected
+* KUSTOM-129: Addresses Magento cannot save are now rejected in the validate callback so the customer can correct them
+* KUSTOM-127: Push and confirmation reuse the shipping rate accepted at validate instead of collecting rates again
+* KUSTOM-128: Shipping method changes and order updates from the Magento checkout page are refused for 5 minutes after validate and once the order exists
+* KUSTOM-128: Changes made inside the Kustom checkout are not affected
 
 ## 12.4.4 / 2026-10-12
 

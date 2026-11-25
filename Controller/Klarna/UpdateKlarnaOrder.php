@@ -90,12 +90,24 @@ class UpdateKlarnaOrder implements HttpPostActionInterface
         $kustomId = '';
         $this->logger->debug('UpdateKlarnaOrder: start');
         try {
-            $kustomId = $this->getKustomId($this->initializer->getKcoSession()->getQuote());
+            $kcoSession = $this->initializer->getKcoSession();
+            $kustomId = $this->getKustomId($kcoSession->getQuote());
             if ($kustomId !== '') {
                 $this->mutationGuard->guardFrontend($kustomId);
             }
+            $oldCheckoutId = (string)$kcoSession->getKlarnaQuote()->getKlarnaCheckoutId();
+            $oldRecurring = (bool)$kcoSession->getKlarnaQuote()->getData('is_recurring');
             $this->initializer->updateKlarnaTotals();
-            return $this->ajax->getSummaryResponse();
+            $newCheckoutId = (string)$kcoSession->getKlarnaQuote()->getKlarnaCheckoutId();
+            $newRecurring = (bool)$kcoSession->getKlarnaQuote()->getData('is_recurring');
+
+            $data = [];
+            if ($oldCheckoutId !== '' && $oldCheckoutId !== $newCheckoutId && $oldRecurring !== $newRecurring) {
+                // The Kustom order was recreated because the recurring state flipped: render the new one.
+                // An expired-order recreate with an unchanged recurring state keeps the previous response.
+                $data['html_snippet'] = $this->initializer->getLatestKlarnaCheckout()->getHtmlSnippet();
+            }
+            return $this->ajax->getSummaryResponse($data);
         } catch (CheckoutLockedException $e) {
             // KUSTOM-128: payment in progress or order created, the quote stays untouched
             $this->logger->info('UpdateKlarnaOrder: refused, checkout locked, Kustom checkout id: ' . $kustomId);
